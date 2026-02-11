@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Tests / Temporary Data
+final_check.json
+search_result.json
+
+# Environment / Secret
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
