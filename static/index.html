@@ -177,8 +177,8 @@
         <div class="input-group">
             <label for="modelName">🚀 Model <a href="#" onclick="refreshModels(); return false;" style="font-size: 0.75rem; color: var(--primary); text-decoration: none; margin-left: auto;">(Refresh)</a></label>
             <select id="modelName">
-                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
                 <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
             </select>
         </div>
         <div class="input-group" style="flex: 0 0 auto;">
@@ -424,7 +424,11 @@
                 const checkedAttr = isVerified ? 'checked' : '';
                 const statusClass = isVerified ? 'valid' : 'invalid';
                 const linkLabel = isVerified ? 'View Profile ↗' : 'Search Store ↗';
-                const linkHtml = `<div class="link-cell"><a id="link-${index}" href="#" onclick="showAppPreview(currentResults[${index}].package, ${index}); return false;">${linkLabel}</a></div>`;
+                const aiResolveBtn = !isVerified ? `<button id="ai-link-${index}" onclick="manualAiResolve(${index}); return false;" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 8px; width: 100%; white-space: nowrap;">✨ AI Resolve</button>` : '';
+                const linkHtml = `<div class="link-cell" style="display: flex; flex-direction: column; align-items: flex-start;">
+                    <a id="link-${index}" href="#" onclick="showAppPreview(currentResults[${index}].package, ${index}); return false;">${linkLabel}</a>
+                    ${aiResolveBtn}
+                </div>`;
 
                 tr.innerHTML = `
                     <td style="text-align:center;">
@@ -447,10 +451,78 @@
             document.getElementById('exportConfig').style.display = 'grid';
         }
 
+        async function manualAiResolve(index) {
+            const app = currentResults[index];
+            const apiKey = document.getElementById('apiKey').value;
+            const modelName = document.getElementById('modelName').value;
+            
+            if(!apiKey) return alert("Please enter API Key");
+            
+            const aiLink = document.getElementById(`ai-link-${index}`);
+            const originalText = aiLink.innerHTML;
+            aiLink.innerHTML = "⏳ AI Working...";
+            aiLink.style.pointerEvents = "none";
+            aiLink.style.opacity = "0.7";
+
+            try {
+                const response = await fetch('/api/ai-resolve', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        app_name: app.name,
+                        api_key: apiKey,
+                        model_name: modelName
+                    })
+                });
+                const data = await response.json();
+                if(data.package_id) {
+                    const pkgInput = document.getElementById(`pkg-input-${index}`);
+                    if (pkgInput) {
+                        pkgInput.value = data.package_id;
+                        currentResults[index].package = data.package_id;
+                        
+                        // Pick it
+                        const row = document.getElementById(`row-${index}`);
+                        const checkbox = row.querySelector('.app-checkbox');
+                        if (checkbox) checkbox.checked = true;
+                        
+                        // Verify and preview
+                        await updatePackage(index, data.package_id);
+                        showAppPreview(data.package_id, index);
+
+                        aiLink.innerHTML = "✅ Resolved";
+                        aiLink.style.color = "var(--success)";
+                    }
+                } else {
+                    aiLink.innerHTML = "❌ Not Found";
+                    aiLink.style.color = "var(--error)";
+                    alert("AI could not find a reliable package ID.");
+                }
+            } catch (e) {
+                aiLink.innerHTML = "⚠️ Error";
+                aiLink.style.color = "var(--error)";
+                alert("AI Resolve Error: " + e.message);
+            } finally {
+                aiLink.style.pointerEvents = "auto";
+                aiLink.style.opacity = "1";
+            }
+        }
+
         async function showAppPreview(packageId, index) {
             const content = document.getElementById('previewContent');
+            const appName = currentResults[index] ? currentResults[index].name : "this app";
+
             if (!packageId) {
-                content.innerHTML = `<p style="color: var(--error); text-align: center; margin-top: 50px;">No package ID provided</p>`;
+                content.innerHTML = `
+                    <div style="text-align: center; margin-top: 50px;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                        <h3>Search Fallback</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">No package ID provided yet.</p>
+                        <hr style="margin: 24px 0; border: 0; border-top: 1px solid var(--border);">
+                        <p style="font-weight: 600;">Search for "${appName}" manually:</p>
+                        <a href="https://play.google.com/store/search?q=${encodeURIComponent(appName)}&c=apps" target="_blank" class="btn btn-secondary" style="margin-top: 16px; text-decoration: none;">Search Play Store</a>
+                    </div>
+                `;
                 return;
             }
 
@@ -526,6 +598,11 @@
                     statusCell.className = "status-badge Pending";
                 }
 
+                const linkElement = document.getElementById(`link-${index}`);
+                if (linkElement) {
+                    linkElement.innerText = "Search Store ↗";
+                }
+
                 try {
                     const response = await fetch(`/api/find-package?app_name=${encodeURIComponent(newValue)}`);
                     const data = await response.json();
@@ -542,6 +619,10 @@
                             statusCell.className = "status-badge invalid";
                         }
                         currentResults[index].status = "Not Found";
+                        const linkElement = document.getElementById(`link-${index}`);
+                        if (linkElement) {
+                            linkElement.innerText = "Search Store ↗";
+                        }
                     }
                 } catch (e) {
                     console.error("Discovery error", e);

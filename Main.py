@@ -19,6 +19,24 @@ class SearchRequest(BaseModel):
     api_key: str
     model_name: str
 
+class AIResolveRequest(BaseModel):
+    app_name: str
+    api_key: str
+    model_name: str
+
+@app.post("/api/ai-resolve")
+def ai_resolve(request: AIResolveRequest):
+    """
+    Manually triggers AI resolution for a specific app name.
+    """
+    try:
+        client = genai.Client(api_key=request.api_key)
+        package_id = scraper_logic.find_id_via_gemini(client, [request.app_name], request.model_name)
+        return {"package_id": package_id}
+    except Exception as e:
+        print(f"Server AI Resolve Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/")
 def read_root():
     return FileResponse('static/index.html')
