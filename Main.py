@@ -76,6 +76,17 @@ def verify_package(package_name: str, app_name: str = ""):
             "play_store_url": f"https://play.google.com/store/search?q={app_name}&c=apps"
         }
 
+@app.get("/api/find-package")
+def find_package(app_name: str):
+    """
+    Attempts to find a package ID for a given app name.
+    Returns the first matching package ID or None.
+    """
+    packages = scraper_logic.get_package_by_name(app_name)
+    if packages:
+        return {"package_id": packages[0]}
+    return {"package_id": None}
+
 @app.get("/api/app-details")
 def app_details(package_id: str):
     details = scraper_logic.get_app_details(package_id)

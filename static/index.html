@@ -62,7 +62,7 @@
         .btn-secondary:hover { background: #475569; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-        .main-layout { display: grid; grid-template-columns: 1fr 400px; gap: 24px; margin-top: 2rem; animation: fadeIn 0.4s ease-out; }
+        .main-layout { display: grid; grid-template-columns: 1fr 500px; gap: 24px; margin-top: 2rem; animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .table-area { min-width: 0; }
@@ -155,7 +155,7 @@
             <label>✨ AI Resolve</label>
             <div style="display: flex; align-items: center; gap: 10px; height: 42px;">
                 <label class="switch">
-                    <input type="checkbox" id="aiResolve" checked>
+                    <input type="checkbox" id="aiResolve">
                     <span class="slider"></span>
                 </label>
                 <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">Highly Recommended</span>
@@ -185,6 +185,10 @@
                     </thead>
                     <tbody id="resultsBody"></tbody>
                 </table>
+            </div>
+
+            <div style="margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: flex-start;">
+                <button onclick="addNewRow()" class="btn btn-secondary">➕ Add Custom App</button>
             </div>
 
             <div class="card export-section-card">
@@ -227,7 +231,6 @@
                 </div>
 
                 <div class="actions" id="exportSection">
-                    <button onclick="addNewRow()" class="btn btn-secondary">➕ Add Custom App</button>
                     <button onclick="exportJson()" class="btn btn-primary">⬇️ Download Research JSON</button>
                 </div>
             </div>
@@ -255,7 +258,8 @@
                 package: "",
                 status: "Pending",
                 play_store_url: "#",
-                weight: 1.0
+                weight: 1.0,
+                isCustom: true
             };
             currentResults.push(newApp);
             
@@ -370,6 +374,7 @@
                 const isVerified = app.status === 'Verified';
                 
                 const checkedAttr = isVerified ? 'checked' : '';
+                const statusClass = isVerified ? 'valid' : 'invalid';
                 const linkLabel = isVerified ? 'View Profile ↗' : 'Search Store ↗';
                 const linkHtml = `<div class="link-cell"><a id="link-${index}" href="#" onclick="showAppPreview(currentResults[${index}].package, ${index}); return false;">${linkLabel}</a></div>`;
 
@@ -380,11 +385,11 @@
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600;" onchange="updateName(${index}, this.value)">
-                            <input type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; color: var(--text-muted);" onchange="updatePackage(${index}, this.value)">
+                            <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; color: ${isVerified ? 'var(--text-muted)' : 'var(--error)'};" onchange="updatePackage(${index}, this.value)">
                         </div>
                     </td>
                     <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center;" onchange="updateWeight(${index}, this.value)"></td>
-                    <td><span id="status-${index}" class="status-badge ${app.status}">${app.status}</span></td>
+                    <td><span id="status-${index}" class="status-badge ${statusClass}">${app.status}</span></td>
                     <td>${linkHtml}</td>
                 `;
                 tbody.appendChild(tr);
@@ -453,8 +458,51 @@
             }
         }
 
-        function updateName(index, newValue) {
+        async function updateName(index, newValue) {
             currentResults[index].name = newValue;
+            
+            // Only auto-resolve for custom added apps
+            if (currentResults[index].isCustom) {
+                const pkgInput = document.getElementById(`pkg-input-${index}`);
+                const statusCell = document.getElementById(`status-${index}`);
+                
+                // Clear old package data immediately
+                if (pkgInput) {
+                    pkgInput.value = "";
+                    pkgInput.style.color = "var(--error)"; // Default to red until found
+                }
+                currentResults[index].package = "";
+                
+                if (statusCell) {
+                    statusCell.innerText = "Searching...";
+                    statusCell.className = "status-badge Pending";
+                }
+
+                try {
+                    const response = await fetch(`/api/find-package?app_name=${encodeURIComponent(newValue)}`);
+                    const data = await response.json();
+                    
+                    if (data.package_id) {
+                        if (pkgInput) {
+                            pkgInput.value = data.package_id;
+                            updatePackage(index, data.package_id);
+                        }
+                    } else {
+                        // Not found - ensure it stays cleared and red
+                        if (statusCell) {
+                            statusCell.innerText = "Not Found";
+                            statusCell.className = "status-badge invalid";
+                        }
+                        currentResults[index].status = "Not Found";
+                    }
+                } catch (e) {
+                    console.error("Discovery error", e);
+                    if (statusCell) {
+                        statusCell.innerText = "Error";
+                        statusCell.className = "status-badge Error";
+                    }
+                }
+            }
         }
 
         function updateWeight(index, newValue) {
@@ -477,14 +525,34 @@
                 currentResults[index].status = data.status;
                 currentResults[index].play_store_url = data.play_store_url;
 
+                const isVerified = data.status === 'Verified';
                 statusCell.innerText = data.status;
-                statusCell.className = `status-badge ${data.status}`;
+                statusCell.className = `status-badge ${isVerified ? 'valid' : 'invalid'}`;
                 
-                linkElement.innerText = data.status === 'Verified' ? 'View Profile ↗' : 'Search Store ↗';
+                const pkgInput = document.getElementById(`pkg-input-${index}`);
+                if (pkgInput) {
+                    pkgInput.style.color = isVerified ? 'var(--text-muted)' : 'var(--error)';
+                }
+                
+                linkElement.innerText = isVerified ? 'View Profile ↗' : 'Search Store ↗';
                 linkElement.onclick = () => {
                     showAppPreview(currentResults[index].package, index);
                     return false;
                 };
+
+                if (isVerified) {
+                    const row = document.getElementById(`row-${index}`);
+                    const checkbox = row ? row.querySelector('.app-checkbox') : null;
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                } else {
+                    const row = document.getElementById(`row-${index}`);
+                    const checkbox = row ? row.querySelector('.app-checkbox') : null;
+                    if (checkbox) {
+                        checkbox.checked = false;
+                    }
+                }
             } catch (e) {
                 statusCell.innerText = "Error";
                 statusCell.className = "status-badge Error";
