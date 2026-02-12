@@ -64,7 +64,7 @@
         .btn-secondary:hover { background: #475569; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-        .main-layout { display: grid; grid-template-columns: 1fr 500px; gap: 24px; margin-top: 2rem; animation: fadeIn 0.4s ease-out; }
+        .main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 2rem; animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .table-area { min-width: 0; }
@@ -79,6 +79,7 @@
         .status-badge { padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; display: inline-block; }
         .valid { background: #ecfdf5; color: #059669; }
         .invalid { background: #fef2f2; color: #dc2626; }
+        .duplicate { background: #fef3c7; color: #b45309; }
 
         .preview-area { position: sticky; top: 2rem; height: calc(100vh - 4rem); display: flex; flex-direction: column; overflow: hidden; }
         .preview-header { padding: 20px; background: #fff; border-bottom: 2px solid var(--border); font-weight: 700; font-size: 1.1rem; color: #0f172a; display: flex; align-items: center; gap: 10px; }
@@ -129,6 +130,43 @@
         }
         
         .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+        
+        /* Tab Styles */
+        .preview-tabs { display: flex; gap: 20px; width: 100%; }
+        .preview-tab { 
+            cursor: pointer; 
+            padding: 8px 0; 
+            border-bottom: 2px solid transparent; 
+            color: var(--text-muted); 
+            font-size: 0.95rem; 
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .preview-tab.active { 
+            color: var(--primary); 
+            border-bottom-color: var(--primary); 
+        }
+        .preview-tab:hover { color: var(--text-main); }
+
+        /* JSON Tree View Styles */
+        .json-tree-container { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.6; }
+        .json-node { margin-left: 18px; position: relative; }
+        .json-line { display: flex; align-items: flex-start; gap: 4px; white-space: nowrap; }
+        .json-toggle { 
+            cursor: pointer; position: absolute; left: -16px; top: 4px; 
+            width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; 
+            font-size: 8px; color: var(--text-muted); transition: all 0.2s;
+            background: #f1f5f9; border-radius: 3px;
+        }
+        .json-toggle:hover { background: var(--border); color: var(--text-main); }
+        .json-toggle.collapsed { transform: rotate(-90deg); }
+        .json-key { color: #7c3aed; font-weight: 600; }
+        .json-string { color: #0891b2; word-break: break-all; white-space: normal; }
+        .json-number { color: #ea580c; }
+        .json-boolean { color: #2563eb; }
+        .json-null { color: #64748b; font-style: italic; }
+        .json-summary { color: var(--text-muted); font-size: 0.75rem; font-style: italic; margin-left: 8px; pointer-events: none; }
+        .json-content { border-left: 1px dashed var(--border); margin-left: -10px; padding-left: 10px; }
         
         /* Export Configuration UI */
         .export-section-card { margin-top: 32px; padding: 28px; background: #fff; border-radius: 20px; border: 1px solid var(--border); }
@@ -275,9 +313,7 @@
 
             <div class="action-btns" id="exportSection">
                 <button onclick="updateLocalCopy()" class="btn btn-secondary" style="background: #10b981; border:none;" title="Save changes to current memory">💾 Update Local</button>
-                <button onclick="viewJson()" class="btn btn-secondary" title="Preview JSON">👁️ Preview</button>
                 <button onclick="clearLocalJson()" class="btn btn-secondary" style="background: #ef4444; border:none;" title="Clear memory">🗑️ Clear</button>
-                <button onclick="exportFullJson()" class="btn btn-primary" title="Download Full JSON">⬇️ Export All</button>
             </div>
         </div>
 
@@ -344,8 +380,18 @@
                 </table>
             </div>
 
-            <div style="margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: flex-start;">
+            <div style="margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
                 <button onclick="addNewRow()" class="btn btn-secondary">➕ Add Custom App</button>
+                <div style="display: flex; align-items: center; gap: 8px; background: #fff; padding: 6px 14px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <label for="filterIssues" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;">Show Issues Only</label>
+                    <label class="switch" style="width: 32px; height: 16px;">
+                        <input type="checkbox" id="filterIssues" onchange="renderTable(currentResults)">
+                        <span class="slider" style="border-radius: 16px;"></span>
+                        <style>
+                            #filterIssues:checked + .slider { background-color: #f59e0b; }
+                        </style>
+                    </label>
+                </div>
             </div>
 
             <!-- Export Configuration is now in the header -->
@@ -355,10 +401,13 @@
 
         <div class="card preview-area" id="previewArea">
             <div class="preview-header">
-                <span>📋 App Insight</span>
+                <div class="preview-tabs">
+                    <div id="tab-insight" class="preview-tab active" onclick="showAppTab()">📋 App Insight</div>
+                    <div id="tab-json" class="preview-tab" onclick="viewJson()">📦 JSON Preview</div>
+                </div>
             </div>
             <div id="previewContent" class="preview-content">
-                <div style="text-align: center; margin-top: 100px; color: var(--text-muted);">
+                <div id="placeholder-content" style="text-align: center; margin-top: 100px; color: var(--text-muted);">
                     <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
                     <p>Select an app from the list to view its market profile.</p>
                 </div>
@@ -366,27 +415,13 @@
         </div>
     </div>
 
-    <!-- JSON Preview Modal -->
-    <div id="jsonModal" class="modal-overlay" onclick="if(event.target === this) closeModal()">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 class="modal-title">📦 Research Data Preview</h3>
-                <span class="modal-close" onclick="closeModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <pre id="jsonContent" class="json-preview"></pre>
-            </div>
-            <div class="modal-footer">
-                <button onclick="closeModal()" class="btn btn-secondary">Close</button>
-                <button onclick="exportJson()" class="btn btn-primary">Download JSON</button>
-            </div>
-        </div>
-    </div>
+    <!-- jsonModal removed as requested -->
 
     <script>
         let currentResults = [];
         let researchResults = [];
         let importedResults = [];
+        let lastViewedApp = null;
 
         function showToast(message, type = 'info', title = '') {
             const container = document.getElementById('toast-container');
@@ -527,7 +562,7 @@
                 if (!response.ok) throw new Error("Server error");
                 
                 const data = await response.json();
-                researchResults = data.data.map(app => ({...app, source: 'research'}));
+                researchResults = data.data.map(app => ({...app, source: 'research', checked: app.status === 'Verified'}));
                 currentResults = [...researchResults, ...importedResults];
                 renderTable(currentResults);
                 showToast(`Found ${researchResults.length} apps for "${topic}"`, 'success', 'Research Complete');
@@ -547,13 +582,26 @@
             const tbody = document.getElementById('resultsBody');
             tbody.innerHTML = '';
             
-            if (apps.length === 0) {
+            const filterIssues = document.getElementById('filterIssues')?.checked;
+            
+            // Map apps to include their original index to maintain correspondence when filtered
+            const appsWithIndex = apps.map((app, i) => ({...app, originalIndex: i}));
+            
+            const filteredApps = filterIssues 
+                ? appsWithIndex.filter(app => app.status === 'Duplicate' || app.status === 'Not Found' || app.status === 'Error' || app.status === 'Checking' || !app.package)
+                : appsWithIndex;
+            
+            if (filteredApps.length === 0) {
+                const message = filterIssues ? "No issue-flagged apps found" : "No Apps Found";
+                const subMessage = filterIssues ? "Your current list is clean!" : "Try broadening your research topic or changing the region.";
+                const icon = filterIssues ? "✨" : "🛸";
+                
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="5" style="text-align:center; padding: 60px;">
-                            <div style="font-size: 4rem; opacity: 0.5;">🛸</div>
-                            <h3 style="margin-bottom: 8px; color: var(--text-main);">No Apps Found</h3>
-                            <p style="color: var(--text-muted);">Try broadening your "Research Topic" or changing the region.</p>
+                            <div style="font-size: 4rem; opacity: 0.5;">${icon}</div>
+                            <h3 style="margin-bottom: 8px; color: var(--text-main);">${message}</h3>
+                            <p style="color: var(--text-muted);">${subMessage}</p>
                         </td>
                     </tr>`;
                 document.getElementById('mainLayout').style.display = 'grid';
@@ -562,7 +610,9 @@
 
             let hasImportedBanner = false;
             
-            apps.forEach((app, index) => {
+            filteredApps.forEach((app) => {
+                const index = app.originalIndex;
+                const isChecked = app.checked;
                 // Add separator before imported apps
                 if (app.source === 'imported' && !hasImportedBanner) {
                     const separator = document.createElement('tr');
@@ -583,9 +633,10 @@
                 }
 
                 const isVerified = app.status === 'Verified';
+                const isDuplicate = app.status === 'Duplicate';
                 
-                const checkedAttr = isVerified ? 'checked' : '';
-                const statusClass = isVerified ? 'valid' : 'invalid';
+                const checkedAttr = isChecked ? 'checked' : '';
+                const statusClass = isVerified ? 'valid' : (isDuplicate ? 'duplicate' : 'invalid');
                 const linkLabel = isVerified ? 'View Profile ↗' : 'Search Store ↗';
                 const aiResolveBtn = !isVerified ? `<button id="ai-link-${index}" onclick="manualAiResolve(${index}); return false;" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 8px; width: 100%; white-space: nowrap;">✨ AI Resolve</button>` : '';
                 const linkHtml = `<div class="link-cell" style="display: flex; flex-direction: column; align-items: flex-start;">
@@ -595,7 +646,7 @@
 
                 tr.innerHTML = `
                     <td style="text-align:center;">
-                        <input type="checkbox" class="app-checkbox" data-index="${index}" ${checkedAttr}>
+                        <input type="checkbox" class="app-checkbox" data-index="${index}" ${checkedAttr} onchange="toggleAppSelection(${index}, this.checked)">
                     </td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -614,6 +665,12 @@
             });
 
             document.getElementById('mainLayout').style.display = 'grid';
+        }
+
+        function toggleAppSelection(index, checked) {
+            if (currentResults[index]) {
+                currentResults[index].checked = checked;
+            }
         }
 
         async function manualAiResolve(index) {
@@ -684,6 +741,11 @@
         async function showAppPreview(packageId, index) {
             const content = document.getElementById('previewContent');
             const appName = currentResults[index] ? currentResults[index].name : "this app";
+            
+            // Switch tab
+            document.getElementById('tab-insight').classList.add('active');
+            document.getElementById('tab-json').classList.remove('active');
+            lastViewedApp = { packageId, index };
 
             if (!packageId) {
                 content.innerHTML = `
@@ -814,13 +876,18 @@
             currentResults[index].weight = parseFloat(newValue) || 1.0;
         }
 
-        async function updatePackage(index, newValue) {
+        async function updatePackage(index, newValue, shouldShowPreview = true) {
+            if (!currentResults[index]) return;
             currentResults[index].package = newValue;
+            
             const statusCell = document.getElementById(`status-${index}`);
             const linkElement = document.getElementById(`link-${index}`);
+            const pkgInput = document.getElementById(`pkg-input-${index}`);
             
-            statusCell.innerText = "Checking...";
-            statusCell.className = "status-badge Pending";
+            if (statusCell) {
+                statusCell.innerText = "Checking...";
+                statusCell.className = "status-badge Pending";
+            }
 
             try {
                 const appName = currentResults[index].name;
@@ -831,21 +898,26 @@
                 currentResults[index].play_store_url = data.play_store_url;
 
                 const isVerified = data.status === 'Verified';
-                statusCell.innerText = data.status;
-                statusCell.className = `status-badge ${isVerified ? 'valid' : 'invalid'}`;
                 
-                const pkgInput = document.getElementById(`pkg-input-${index}`);
+                if (statusCell) {
+                    statusCell.innerText = data.status;
+                    statusCell.className = `status-badge ${isVerified ? 'valid' : 'invalid'}`;
+                }
+                
                 if (pkgInput) {
                     pkgInput.style.color = isVerified ? 'var(--text-muted)' : 'var(--error)';
                 }
                 
-                linkElement.innerText = isVerified ? 'View Profile ↗' : 'Search Store ↗';
-                linkElement.onclick = () => {
-                    showAppPreview(currentResults[index].package, index);
-                    return false;
-                };
+                if (linkElement) {
+                    linkElement.innerText = isVerified ? 'View Profile ↗' : 'Search Store ↗';
+                    linkElement.onclick = () => {
+                        showAppPreview(currentResults[index].package, index);
+                        return false;
+                    };
+                }
 
                 if (isVerified) {
+                    currentResults[index].checked = true;
                     const row = document.getElementById(`row-${index}`);
                     const checkbox = row ? row.querySelector('.app-checkbox') : null;
                     if (checkbox) {
@@ -857,31 +929,43 @@
                         existingAiBtn.remove();
                     }
                     
-                    // Auto-show preview
-                    showAppPreview(newValue, index);
+                    if (shouldShowPreview) {
+                        showAppPreview(newValue, index);
+                    }
                 } else {
+                    currentResults[index].checked = false;
                     const row = document.getElementById(`row-${index}`);
                     const checkbox = row ? row.querySelector('.app-checkbox') : null;
                     if (checkbox) {
                         checkbox.checked = false;
                     }
-                    // Add AI button if it doesn't exist
-                    const existingAiBtn = document.getElementById(`ai-link-${index}`);
-                    if (!existingAiBtn) {
-                        // find link container - linkElement is the a tag, parent is the div
-                        const linkContainer = linkElement.parentElement;
-                        const aiBtn = document.createElement('button');
-                        aiBtn.id = `ai-link-${index}`;
-                        aiBtn.onclick = (e) => { e.preventDefault(); manualAiResolve(index); };
-                        aiBtn.className = "btn btn-secondary";
-                        aiBtn.style.cssText = "font-size: 0.7rem; padding: 4px 8px; margin-top: 8px; width: 100%; white-space: nowrap;";
-                        aiBtn.innerText = "✨ AI Resolve";
-                        linkContainer.appendChild(aiBtn);
+                    
+                    if (linkElement) {
+                        const existingAiBtn = document.getElementById(`ai-link-${index}`);
+                        if (!existingAiBtn) {
+                            const linkContainer = linkElement.parentElement;
+                            const aiBtn = document.createElement('button');
+                            aiBtn.id = `ai-link-${index}`;
+                            aiBtn.onclick = (e) => { e.preventDefault(); manualAiResolve(index); };
+                            aiBtn.className = "btn btn-secondary";
+                            aiBtn.style.cssText = "font-size: 0.7rem; padding: 4px 8px; margin-top: 8px; width: 100%; white-space: nowrap;";
+                            aiBtn.innerText = "✨ AI Resolve";
+                            linkContainer.appendChild(aiBtn);
+                        }
                     }
                 }
             } catch (e) {
-                statusCell.innerText = "Error";
-                statusCell.className = "status-badge Error";
+                console.error("Verification error", e);
+                currentResults[index].status = "Error";
+                if (statusCell) {
+                    statusCell.innerText = "Error";
+                    statusCell.className = "status-badge invalid";
+                }
+            } finally {
+                // If background update and filter is on, re-render to hide verified or show discovered issues
+                if (!shouldShowPreview && document.getElementById('filterIssues')?.checked) {
+                    renderTable(currentResults);
+                }
             }
         }
 
@@ -908,15 +992,15 @@
 
             if (isList && !listName) throw new Error("Please enter a List Name before exporting when 'isList' is enabled.");
 
-            const checkboxes = document.querySelectorAll('.app-checkbox:checked');
-            const selectedApps = Array.from(checkboxes).map(cb => {
-                const index = cb.getAttribute('data-index');
-                return {
-                    package: currentResults[index].package,
-                    name: currentResults[index].name,
-                    weight: parseFloat(currentResults[index].weight) || 1.0
-                };
-            });
+            const selectedApps = currentResults
+                .filter(app => app.checked)
+                .map(app => {
+                    return {
+                        package: app.package,
+                        name: app.name,
+                        weight: parseFloat(app.weight) || 1.0
+                    };
+                });
 
             if(selectedApps.length === 0) throw new Error("No apps selected!");
 
@@ -935,15 +1019,32 @@
 
         function exportJson() {
             try {
-                const { groupKey, ...finalOutput } = generateExportData();
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalOutput, null, 2));
+                let dataToExport;
+                let fileName;
+
+                // If we have a local dataset loaded, export the whole thing
+                if (importedJsonData && importedJsonData.AppList && Object.keys(importedJsonData.AppList).length > 0) {
+                    dataToExport = importedJsonData;
+                    fileName = importedFileName || "research_data_complete.json";
+                } else {
+                    // Otherwise export the current category results
+                    const { groupKey, ...finalOutput } = generateExportData();
+                    dataToExport = finalOutput;
+                    fileName = groupKey + ".json";
+                }
+
+                const jsonStr = JSON.stringify(dataToExport, null, 2)
+                    .replace(/("(?:weight|threshold)":\s*)(\d+)(?=[,\s\}]|$)/g, '$1$2.0');
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
                 const dl = document.createElement('a');
                 dl.setAttribute("href", dataStr);
-                dl.setAttribute("download", groupKey + ".json");
+                dl.setAttribute("download", fileName);
                 document.body.appendChild(dl);
                 dl.click();
                 dl.remove();
-                showToast("JSON Exported Successfully!", 'success');
+                
+                showToast(`Exported ${fileName} successfully!`, 'success');
             } catch (e) {
                 showToast(e.message, 'error', 'Export Failed');
             }
@@ -1091,17 +1192,48 @@
                 }
 
                 if (appList.length > 0) {
-                    importedResults = appList.map(app => ({
-                        name: app.name || "Unknown",
-                        package: app.package || "",
-                        weight: app.weight || 1.0,
-                        status: "Verified", // Default to verified if coming from a curated list
-                        play_store_url: `https://play.google.com/store/apps/details?id=${app.package}`,
-                        source: 'imported'
-                    }));
+                    // Filter out duplicates (based on package name)
+                    const existingPackages = new Set(researchResults.map(a => a.package).filter(p => !!p));
+                    const uniqueImported = [];
+                    const seenInImport = new Set();
+                    let duplicatesCount = 0;
+
+                    appList.forEach(app => {
+                        const pkg = app.package || "";
+                        const isDuplicate = pkg && (existingPackages.has(pkg) || seenInImport.has(pkg));
+                        
+                        if (isDuplicate) duplicatesCount++;
+                        if (pkg) seenInImport.add(pkg);
+                        
+                        uniqueImported.push({
+                            name: app.name || "Unknown",
+                            package: pkg,
+                            weight: app.weight || 1.0,
+                            status: isDuplicate ? "Duplicate" : "Checking",
+                            isDuplicate: isDuplicate,
+                            checked: !isDuplicate && (app.status === 'Verified' || !app.status), // maintain selection if verified
+                            play_store_url: `https://play.google.com/store/apps/details?id=${pkg}`,
+                            source: 'imported'
+                        });
+                    });
+
+                    importedResults = uniqueImported;
                     currentResults = [...researchResults, ...importedResults];
                     renderTable(currentResults);
-                    showToast(`Loaded ${importedResults.length} apps and settings for "${catKey}"`, 'success');
+                    
+                    // Trigger verification for each imported app, but skip duplicates
+                    const startIndex = researchResults.length;
+                    importedResults.forEach((app, i) => {
+                        if (!app.isDuplicate) {
+                            updatePackage(startIndex + i, app.package, false);
+                        }
+                    });
+
+                    let toastMsg = `Loaded ${importedResults.length} apps for "${catKey}"...`;
+                    if (duplicatesCount > 0) {
+                        toastMsg += ` (${duplicatesCount} duplicates marked)`;
+                    }
+                    showToast(toastMsg, 'success');
                 } else {
                     // If no list, clear only the imported results
                     importedResults = [];
@@ -1171,35 +1303,64 @@
             }
         }
 
+        function showAppTab() {
+            if (lastViewedApp) {
+                showAppPreview(lastViewedApp.packageId, lastViewedApp.index);
+            } else {
+                document.getElementById('tab-insight').classList.add('active');
+                document.getElementById('tab-json').classList.remove('active');
+                document.getElementById('previewContent').innerHTML = `
+                    <div style="text-align: center; margin-top: 100px; color: var(--text-muted);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                        <p>Select an app from the list to view its market profile.</p>
+                    </div>
+                `;
+            }
+        }
+
         function viewJson() {
             try {
                 let jsonToShow;
                 let title = '📦 Research Data Preview';
                 
+                // Switch tab
+                document.getElementById('tab-insight').classList.remove('active');
+                document.getElementById('tab-json').classList.add('active');
+
                 // Show the full accumulated JSON if available, otherwise current selection
                 if (importedJsonData && importedJsonData.AppList && Object.keys(importedJsonData.AppList).length > 0) {
                     jsonToShow = importedJsonData;
-                    const categoryCount = Object.keys(importedJsonData.AppList).length;
-                    const totalApps = Object.values(importedJsonData.AppList).reduce((sum, cat) => sum + (cat.list?.length || 0), 0);
-                    title = `📦 Local JSON - ${categoryCount} Categories, ${totalApps} Apps`;
                 } else {
                     const { groupKey, ...finalOutput } = generateExportData();
                     jsonToShow = finalOutput;
-                    title = '📦 Current Selection Preview';
                 }
                 
-                document.getElementById('jsonModal').querySelector('.modal-title').innerText = title;
-                document.getElementById('jsonContent').innerText = JSON.stringify(jsonToShow, null, 2);
-                document.getElementById('jsonModal').style.display = 'flex';
-                document.body.style.overflow = 'hidden'; // Prevent scrolling
+                const content = document.getElementById('previewContent');
+                content.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; font-size: 1rem; color: var(--text-muted);">JSON Data Explorer</h3>
+                            <button onclick="exportJson()" class="btn btn-primary" style="font-size: 0.8rem; padding: 6px 12px;">⬇️ Download JSON</button>
+                        </div>
+                        <div id="jsonTreeRoot" class="json-tree-container" style="max-height: calc(100vh - 200px); overflow-y: auto; padding-left: 20px;"></div>
+                    </div>
+                `;
+                
+                renderJsonTree(jsonToShow, document.getElementById('jsonTreeRoot'));
             } catch (e) {
-                showToast(e.message, 'error', 'Preview Failed');
+                // If it fails because of missing fields, just show what we can or an empty object
+                const content = document.getElementById('previewContent');
+                content.innerHTML = `
+                    <div style="text-align: center; margin-top: 100px; color: var(--text-muted);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                        <h3>No Data Selected</h3>
+                        <p>${e.message}</p>
+                    </div>
+                `;
+                // Switch tab back if no data
+                document.getElementById('tab-insight').classList.add('active');
+                document.getElementById('tab-json').classList.remove('active');
             }
-        }
-
-        function closeModal() {
-            document.getElementById('jsonModal').style.display = 'none';
-            document.body.style.overflow = 'auto'; // Restore scrolling
         }
 
         function updateLocalCopy() {
@@ -1245,60 +1406,26 @@
                     targetCategory.listName = currentCategoryData.listName;
                 }
 
-                // Merge apps with deduplication
-                const existingApps = targetCategory.list || [];
-                const packageMap = new Map();
-                
-                // Add existing apps to map
-                existingApps.forEach(app => packageMap.set(app.package, app));
-                
-                // Add/update new apps (overwrites if package already exists)
-                let addedCount = 0;
-                let updatedCount = 0;
-                newApps.forEach(app => {
-                    if (packageMap.has(app.package)) {
-                        updatedCount++;
-                    } else {
-                        addedCount++;
-                    }
-                    packageMap.set(app.package, app);
-                });
-
-                targetCategory.list = Array.from(packageMap.values());
+                // Update the category list with ONLY checked apps
+                const previousCount = targetCategory.list?.length || 0;
+                targetCategory.list = newApps;
 
                 // Save to localStorage
                 localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
                 localStorage.setItem('lastImportedFileName', importedFileName);
 
-                showToast(`Updated "${groupKey}": ${addedCount} added, ${updatedCount} updated. Total: ${targetCategory.list.length} apps`, 'success', 'Local Copy Updated');
+                showToast(`Synchronized "${groupKey}": ${newApps.length} apps selected (was ${previousCount})`, 'success', 'Local Copy Updated');
+
+                // Refresh JSON view if it's currently active
+                if (document.getElementById('tab-json').classList.contains('active')) {
+                    viewJson();
+                }
 
             } catch (e) {
                 showToast("Update Failed: " + e.message, 'error');
             }
         }
 
-        function exportFullJson() {
-            try {
-                if (!importedJsonData || !importedJsonData.AppList || Object.keys(importedJsonData.AppList).length === 0) {
-                    showToast("No data to export. Use 'Update Local Copy' first.", 'error');
-                    return;
-                }
-
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(importedJsonData, null, 2));
-                const dl = document.createElement('a');
-                dl.setAttribute("href", dataStr);
-                dl.setAttribute("download", importedFileName || "research_data.json");
-                document.body.appendChild(dl);
-                dl.click();
-                dl.remove();
-                
-                const categoryCount = Object.keys(importedJsonData.AppList).length;
-                const totalApps = Object.values(importedJsonData.AppList).reduce((sum, cat) => sum + (cat.list?.length || 0), 0);
-                showToast(`Exported ${categoryCount} categories with ${totalApps} total apps`, 'success', 'Export Complete');
-            } catch (e) {
-                showToast(e.message, 'error', 'Export Failed');
-            }
-        }
 
         function clearLocalJson() {
             if (!confirm('Are you sure you want to clear all local JSON data? This cannot be undone.')) {
@@ -1339,6 +1466,106 @@
             } catch (e) {
                 showToast('Failed to clear local JSON: ' + e.message, 'error', 'Clear Failed');
             }
+        }
+
+        // --- JSON Tree Renderer ---
+        function renderJsonTree(data, container) {
+            container.innerHTML = '';
+            container.appendChild(createJsonNode(null, data, true));
+        }
+
+        function createJsonNode(key, value, isRoot = false) {
+            const node = document.createElement('div');
+            node.className = 'json-node';
+            
+            const line = document.createElement('div');
+            line.className = 'json-line';
+            
+            if (key !== null) {
+                const keySpan = document.createElement('span');
+                keySpan.className = 'json-key';
+                keySpan.innerText = `"${key}": `;
+                line.appendChild(keySpan);
+            }
+            
+            if (value && typeof value === 'object') {
+                const isArray = Array.isArray(value);
+                const openBrace = isArray ? '[' : '{';
+                const closeBrace = isArray ? ']' : '}';
+                const entries = Object.entries(value);
+                const size = entries.length;
+                
+                line.innerHTML += `<span>${openBrace}</span>`;
+                
+                if (size > 0) {
+                    const toggle = document.createElement('span');
+                    toggle.className = 'json-toggle';
+                    toggle.innerHTML = '▼';
+                    line.prepend(toggle);
+                    
+                    const summary = document.createElement('span');
+                    summary.className = 'json-summary';
+                    summary.innerText = isArray ? `${size} items ... ${closeBrace}` : `${size} keys ... ${closeBrace}`;
+                    line.appendChild(summary);
+                    
+                    const content = document.createElement('div');
+                    content.className = 'json-content';
+                    
+                    entries.forEach(([k, v]) => {
+                        content.appendChild(createJsonNode(isArray ? null : k, v));
+                    });
+                    
+                    const closeLine = document.createElement('div');
+                    closeLine.innerText = closeBrace;
+                    
+                    node.appendChild(line);
+                    node.appendChild(content);
+                    node.appendChild(closeLine);
+                    
+                    toggle.onclick = (e) => {
+                        const isCollapsed = content.style.display === 'none';
+                        content.style.display = isCollapsed ? 'block' : 'none';
+                        summary.style.display = isCollapsed ? 'none' : 'inline';
+                        closeLine.style.display = isCollapsed ? 'block' : 'none';
+                        toggle.classList.toggle('collapsed');
+                    };
+                    
+                    // Initial state: Expand root, collapse deep or large structures
+                    const shouldCollapse = !isRoot && (size > 5 || key === 'list');
+                    if (shouldCollapse) {
+                        content.style.display = 'none';
+                        summary.style.display = 'inline';
+                        closeLine.style.display = 'none';
+                        toggle.classList.add('collapsed');
+                    } else {
+                        summary.style.display = 'none';
+                    }
+                } else {
+                    line.innerHTML += `<span>${closeBrace}</span>`;
+                    node.appendChild(line);
+                }
+            } else {
+                const valueSpan = document.createElement('span');
+                if (typeof value === 'string') {
+                    valueSpan.className = 'json-string';
+                    valueSpan.innerText = `"${value}"`;
+                } else if (typeof value === 'number') {
+                    valueSpan.className = 'json-number';
+                    // Force .0 for weight and threshold if they are integers
+                    const isFloatTarget = key === 'weight' || key === 'threshold';
+                    valueSpan.innerText = (isFloatTarget && Number.isInteger(value)) ? value.toFixed(1) : value;
+                } else if (typeof value === 'boolean') {
+                    valueSpan.className = 'json-boolean';
+                    valueSpan.innerText = value;
+                } else if (value === null) {
+                    valueSpan.className = 'json-null';
+                    valueSpan.innerText = 'null';
+                }
+                line.appendChild(valueSpan);
+                node.appendChild(line);
+            }
+            
+            return node;
         }
     </script>
     <style>
