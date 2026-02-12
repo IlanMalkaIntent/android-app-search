@@ -38,10 +38,12 @@
         .card { background: var(--card-bg); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); transition: all 0.3s ease; }
         .card:hover { box-shadow: var(--shadow-lg); }
 
-        .controls-container { padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; align-items: flex-end; margin-bottom: 2rem; }
+        .controls-container { padding: 28px; display: flex; flex-direction: column; gap: 24px; margin-bottom: 2rem; }
+        .search-row { display: flex; gap: 20px; align-items: flex-end; width: 100%; }
+        .settings-row { display: flex; gap: 20px; align-items: flex-end; width: 100%; padding-top: 20px; border-top: 1px solid var(--border); }
         
-        .input-group { display: flex; flex-direction: column; gap: 8px; }
-        label { font-size: 0.875rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+        label { font-size: 0.875rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
         
         input, select { 
             padding: 12px 16px; 
@@ -144,6 +146,26 @@
         .tooltip .tooltiptext { visibility: hidden; width: 220px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 8px; padding: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: all 0.2s; font-weight: 400; font-size: 0.8rem; line-height: 1.4; pointer-events: none; box-shadow: var(--shadow-lg); }
         .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(-5px); }
 
+        /* Toast Styles */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast {
+            min-width: 300px; padding: 16px 20px; background: #fff; border-radius: 12px;
+            box-shadow: var(--shadow-lg); border-left: 4px solid var(--primary);
+            display: flex; align-items: flex-start; gap: 12px; animation: slideInRight 0.3s ease-out;
+            color: var(--text-main); font-size: 0.9rem;
+        }
+        .toast-success { border-left-color: var(--success); }
+        .toast-error { border-left-color: var(--error); }
+        .toast-info { border-left-color: var(--text-muted); }
+        .toast-content { display: flex; flex-direction: column; gap: 4px; }
+        .toast-title { font-weight: 700; font-size: 0.95rem; }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* Updated Table Styles */
+        .table-container { overflow-y: auto; max-height: calc(100vh - 200px); scrollbar-width: thin; }
+        thead { position: sticky; top: 0; z-index: 10; background: #f8fafc; border-bottom: 2px solid var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
         #loading { display: none; text-align: center; padding: 4rem; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
         
@@ -155,43 +177,146 @@
         
         .link-cell a { color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 4px; }
         .link-cell a:hover { text-decoration: underline; }
+
+        /* Gear Button */
+        .btn-gear { background: #f1f5f9; color: #475569; width: 46px; height: 46px; padding: 0; font-size: 1.25rem; }
+        .btn-gear:hover { background: #e2e8f0; color: #1e293b; }
+
+        .top-controls-grid { display: grid; grid-template-columns: 1fr 200px; gap: 16px; align-items: flex-end; }
+        .dataset-header-row { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); align-items: center; }
+        .export-header-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--border); }
+        
+        .compact-group { display: flex; flex-direction: column; gap: 4px; }
+        .compact-group label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: var(--text-muted); }
+        .compact-group input, .compact-group select { padding: 8px 12px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border); }
+        .action-btns { display: flex; gap: 8px; }
+        .action-btns .btn { padding: 8px 16px; font-size: 0.8rem; height: 38px; }
+
+        .settings-modal .modal-container { max-width: 450px; }
     </style>
 </head>
 <body>
 
-    <h1>📱 App Market Researcher</h1>
-    
-    <div class="card controls-container">
-        <div class="input-group">
-            <label for="topic">🔍 Research Topic</label>
-            <input type="text" id="topic" placeholder="e.g. Hiking Trackers">
-        </div>
-        <div class="input-group">
-            <label for="region">🌍 Target Region</label>
-            <input type="text" id="region" placeholder="e.g. US, Singapore" value="">
-        </div>
-        <div class="input-group">
-            <label for="apiKey">🔑 Gemini API Key</label>
-            <input type="password" id="apiKey" placeholder="••••••••••••••••">
-        </div>
-        <div class="input-group">
-            <label for="modelName">🚀 Model <a href="#" onclick="refreshModels(); return false;" style="font-size: 0.75rem; color: var(--primary); text-decoration: none; margin-left: auto;">(Refresh)</a></label>
-            <select id="modelName">
-                <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
-            </select>
-        </div>
-        <div class="input-group" style="flex: 0 0 auto;">
-            <label>✨ AI Resolve</label>
-            <div style="display: flex; align-items: center; gap: 10px; height: 42px;">
-                <label class="switch">
-                    <input type="checkbox" id="aiResolve">
-                    <span class="slider"></span>
-                </label>
-                <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">Can take a while</span>
+    <div id="settingsModal" class="modal-overlay" onclick="if(event.target === this) toggleSettings(false)">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">⚙️ AI Research Settings</h3>
+                <span class="modal-close" onclick="toggleSettings(false)">&times;</span>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 20px; background: #fff;">
+                <div class="input-group">
+                    <label for="apiKey">🔑 Gemini API Key</label>
+                    <input type="password" id="apiKey" placeholder="Enter your API Key">
+                </div>
+                <div class="input-group">
+                    <label for="modelName">🤖 AI Model <a href="#" onclick="refreshModels(); return false;" style="font-size: 0.75rem; color: var(--primary); text-decoration: none; margin-left: auto;">(Refresh List)</a></label>
+                    <select id="modelName">
+                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                        <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                        <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>✨ Deep Search (AI Resolve)</label>
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border);">
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Use AI to find missing package IDs</span>
+                        <label class="switch">
+                            <input type="checkbox" id="aiResolve">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="toggleSettings(false)" class="btn btn-primary" style="width: 100%;">Apply & Close</button>
             </div>
         </div>
-        <button onclick="performSearch()" id="searchBtn" class="btn btn-primary">Start Research</button>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">📱 AppSearch</h1>
+        <div style="display: flex; gap: 12px;">
+            <button onclick="toggleSettings(true)" class="btn btn-secondary btn-gear" title="Settings">⚙️</button>
+            <button onclick="performSearch()" id="searchBtn" class="btn btn-primary">🚀 Start Research</button>
+        </div>
+    </div>
+    
+    <div class="card controls-container" style="padding: 20px; gap: 16px;">
+        <!-- Row 1: Research Topic & Region -->
+        <div class="top-controls-grid">
+            <div class="input-group">
+                <label for="topic">🔍 Research Topic</label>
+                <input type="text" id="topic" placeholder="e.g. Fitness Trackers, Banking Apps...">
+            </div>
+            <div class="input-group">
+                <label for="region">🌍 Region</label>
+                <input type="text" id="region" placeholder="US, IL, SG..." value="">
+            </div>
+        </div>
+
+        <!-- Row 2: Dataset Management (Import/Restore) -->
+        <div class="dataset-header-row">
+            <div class="action-btns">
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="loadJsonFile()">
+                <button onclick="document.getElementById('importFile').click()" class="btn btn-secondary">📁 Load Dataset</button>
+            </div>
+            
+            <div id="categoryLoader" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="importedFileName" style="color: var(--success); font-weight: 600; font-size: 0.85rem; white-space: nowrap;"></span>
+                    <select id="importCategorySelect" onchange="onCategorySelect()" class="edit-input" style="height: 38px; flex: 1; min-width: 200px; background: #fff; border: 1px solid var(--border); border-radius: 8px;">
+                        <option value="">-- Choose Existing Category --</option>
+                    </select>
+                </div>
+            </div>
+            <div id="noLoaderMsg" style="color: var(--text-muted); font-size: 0.85rem; font-style: italic;">No dataset loaded.</div>
+
+            <div class="action-btns" id="exportSection">
+                <button onclick="updateLocalCopy()" class="btn btn-secondary" style="background: #10b981; border:none;" title="Save changes to current memory">💾 Update Local</button>
+                <button onclick="viewJson()" class="btn btn-secondary" title="Preview JSON">👁️ Preview</button>
+                <button onclick="clearLocalJson()" class="btn btn-secondary" style="background: #ef4444; border:none;" title="Clear memory">🗑️ Clear</button>
+                <button onclick="exportFullJson()" class="btn btn-primary" title="Download Full JSON">⬇️ Export All</button>
+            </div>
+        </div>
+
+        <!-- Row 3: Export Configuration -->
+        <div class="export-header-row">
+            <div class="compact-group">
+                <label for="groupKey">Category Key</label>
+                <input type="text" id="groupKey" placeholder="e.g. TravelApps">
+            </div>
+            <div class="compact-group">
+                <label for="exportMsName">MS Name</label>
+                <input type="text" id="exportMsName" placeholder="Segment Name">
+            </div>
+            <div class="compact-group" style="width: 80px;">
+                <label for="exportCount">Min Apps</label>
+                <input type="number" id="exportCount" value="1">
+            </div>
+            <div class="compact-group" style="width: 80px;">
+                <label for="exportThreshold">Min Weight</label>
+                <input type="number" id="exportThreshold" step="0.1" value="1.0">
+            </div>
+            <div class="compact-group" id="listNameGroup" style="flex: 2;">
+                <label for="exportListName">List Name</label>
+                <input type="text" id="exportListName" placeholder="List Name">
+            </div>
+            <div class="compact-group" style="width: 50px; align-items: center;">
+                <label>isList</label>
+                <div style="height: 34px; display: flex; align-items: center;">
+                    <label class="switch" style="width: 32px; height: 16px;">
+                        <input type="checkbox" id="exportIsList" checked onchange="toggleListName(this.checked)">
+                        <span class="slider" style="border-radius: 16px;"></span>
+                        <style>
+                            .slider:before { height: 10px; width: 10px; left: 3px; bottom: 3px; }
+                            input:checked + .slider:before { transform: translateX(16px); }
+                        </style>
+                    </label>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="loading">
@@ -199,6 +324,8 @@
         <div style="font-size: 1.5rem; font-weight: 700; color: #334155;">Researching Markets...</div>
         <div style="color: var(--text-muted); margin-top: 0.5rem;">Analyzing Play Store data and identifying competitors.</div>
     </div>
+
+    <div id="toast-container"></div>
 
     <div class="main-layout" id="mainLayout" style="display:none;">
         <div class="table-area">
@@ -221,51 +348,10 @@
                 <button onclick="addNewRow()" class="btn btn-secondary">➕ Add Custom App</button>
             </div>
 
-            <div class="card export-section-card">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                    <span style="font-size: 1.5rem;">📦</span>
-                    <h3 style="margin: 0; font-weight: 700; color: #0f172a;">Export Configuration</h3>
-                </div>
-                <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 24px;">Configure the target microsegment and weighting logic for your final JSON output.</p>
-                
-                <div class="export-config-grid" id="exportConfig" style="display:none;">
-                    <div class="input-group">
-                        <label for="groupKey">Category</label>
-                        <input type="text" id="groupKey" placeholder="e.g. StreamingApps">
-                    </div>
-                    <div class="input-group">
-                        <label for="exportCount">Count Threshold <span class="tooltip">ⓘ<span class="tooltiptext">The minimum number of installed apps required for the category to be considered active.</span></span></label>
-                        <input type="number" id="exportCount" value="1">
-                    </div>
-                    <div class="input-group">
-                        <label for="exportThreshold">Weight Threshold <span class="tooltip">ⓘ<span class="tooltiptext">The minimum cumulative weight required for the category to be considered active.</span></span></label>
-                        <input type="number" id="exportThreshold" step="0.1" value="1.0">
-                    </div>
-                    <div class="input-group">
-                        <label for="exportMsName">MS Name <span class="tooltip">ⓘ<span class="tooltiptext">The name of the microsegment</span></span></label>
-                        <input type="text" id="exportMsName" placeholder="e.g. StreamingApplications">
-                    </div>
-                    <div class="input-group">
-                        <label for="exportListName">List Name <span class="tooltip">ⓘ<span class="tooltiptext">The name for the list microsegment</span></span></label>
-                        <input type="text" id="exportListName" placeholder="e.g. StreamingApplicationsList">
-                    </div>
-                    <div class="input-group" style="flex: 0 0 auto;">
-                        <label>isList</label>
-                        <div style="display: flex; align-items: center; gap: 10px; height: 42px;">
-                            <label class="switch">
-                                <input type="checkbox" id="exportIsList" checked onchange="toggleListName(this.checked)">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
+            <!-- Export Configuration is now in the header -->
 
-                <div class="actions" id="exportSection">
-                    <button onclick="viewJson()" class="btn btn-secondary">👁️ View JSON</button>
-                    <button onclick="exportJson()" class="btn btn-primary">⬇️ Download Research JSON</button>
-                </div>
+            <!-- Dataset actions moved to top card -->
             </div>
-        </div>
 
         <div class="card preview-area" id="previewArea">
             <div class="preview-header">
@@ -299,6 +385,33 @@
 
     <script>
         let currentResults = [];
+        let researchResults = [];
+        let importedResults = [];
+
+        function showToast(message, type = 'info', title = '') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            const icon = type === 'success' ? '✅' : type === 'error' ? '⚠️' : 'ℹ️';
+            const titleHtml = title ? `<div class="toast-title">${title}</div>` : '';
+            
+            toast.innerHTML = `
+                <div style="font-size: 1.2rem;">${icon}</div>
+                <div class="toast-content">
+                    ${titleHtml}
+                    <div>${message}</div>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Auto remove
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.5s forwards';
+                setTimeout(() => toast.remove(), 500);
+            }, 3500);
+        }
 
         function addNewRow() {
             const newApp = {
@@ -307,14 +420,26 @@
                 status: "Pending",
                 play_store_url: "#",
                 weight: 1.0,
-                isCustom: true
+                isCustom: true,
+                source: 'research'
             };
-            currentResults.push(newApp);
+            researchResults.push(newApp);
+            currentResults = [...researchResults, ...importedResults];
             
             document.getElementById('mainLayout').style.display = 'grid';
-            document.getElementById('exportConfig').style.display = 'grid';
             
             renderTable(currentResults);
+
+            // Scroll to the new row
+            setTimeout(() => {
+                const tableBody = document.getElementById('resultsBody');
+                if (tableBody && tableBody.lastElementChild) {
+                    tableBody.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Highlight the input for quick editing
+                    const inputs = tableBody.lastElementChild.querySelectorAll('input');
+                    if (inputs.length > 0) inputs[0].focus();
+                }
+            }, 100);
         }
 
         window.onload = () => {
@@ -325,7 +450,14 @@
             if(localStorage.getItem('geminiModel')) {
                 document.getElementById('modelName').value = localStorage.getItem('geminiModel');
             }
+            
+            // Restore last imported JSON if available
+            restoreLastImportedJson();
         };
+
+        function toggleSettings(show) {
+            document.getElementById('settingsModal').style.display = show ? 'flex' : 'none';
+        }
 
         async function refreshModels() {
             const apiKey = document.getElementById('apiKey').value;
@@ -353,10 +485,9 @@
                     select.appendChild(opt);
                 });
                 
-                select.value = currentValue;
-                alert("Model list updated from API!");
+                showToast("Model list updated from API!", 'success');
             } catch (e) {
-                alert("Error fetching models: " + e.message);
+                showToast("Error fetching models: " + e.message, 'error');
             }
         }
 
@@ -367,8 +498,10 @@
             const apiKey = document.getElementById('apiKey').value;
             const modelName = document.getElementById('modelName').value;
             
-            if(!topic) return alert("Please enter a topic");
-            if(!apiKey) return alert("Please enter your Gemini API Key");
+            if(!topic) return showToast("Please enter a topic", 'error', 'Missing Input');
+            if(!apiKey) return showToast("Please enter your Gemini API Key", 'error', 'Missing Key');
+
+            localStorage.setItem('geminiApiKey', apiKey);
 
             localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelName);
@@ -394,14 +527,19 @@
                 if (!response.ok) throw new Error("Server error");
                 
                 const data = await response.json();
-                currentResults = data.data;
+                researchResults = data.data.map(app => ({...app, source: 'research'}));
+                currentResults = [...researchResults, ...importedResults];
                 renderTable(currentResults);
+                showToast(`Found ${researchResults.length} apps for "${topic}"`, 'success', 'Research Complete');
             } catch (error) {
-                alert("Error: " + error.message);
+                showToast("Error: " + error.message, 'error', 'Search Failed');
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('searchBtn').disabled = false;
                 document.getElementById('searchBtn').innerText = "Start Research";
+                
+                // Restore imported JSON after search
+                restoreLastImportedJson();
             }
         }
 
@@ -410,15 +548,40 @@
             tbody.innerHTML = '';
             
             if (apps.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px;">No apps found. Try refining your research topic.</td></tr>';
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align:center; padding: 60px;">
+                            <div style="font-size: 4rem; opacity: 0.5;">🛸</div>
+                            <h3 style="margin-bottom: 8px; color: var(--text-main);">No Apps Found</h3>
+                            <p style="color: var(--text-muted);">Try broadening your "Research Topic" or changing the region.</p>
+                        </td>
+                    </tr>`;
                 document.getElementById('mainLayout').style.display = 'grid';
-                document.getElementById('exportConfig').style.display = 'none';
                 return;
             }
 
+            let hasImportedBanner = false;
+            
             apps.forEach((app, index) => {
+                // Add separator before imported apps
+                if (app.source === 'imported' && !hasImportedBanner) {
+                    const separator = document.createElement('tr');
+                    separator.innerHTML = `
+                        <td colspan="5" style="background: #f8fafc; text-align: center; color: #475569; padding: 16px; font-weight: 700; font-size: 0.85rem; border-top: 2px dashed #e2e8f0; border-bottom: 2px dashed #e2e8f0;">
+                            📂 APPS LOADED FROM JSON DATA
+                        </td>`;
+                    tbody.appendChild(separator);
+                    hasImportedBanner = true;
+                }
+
                 const tr = document.createElement('tr');
                 tr.id = `row-${index}`;
+                
+                // Visual distinction for imported apps
+                if (app.source === 'imported') {
+                    tr.style.backgroundColor = 'rgba(241, 245, 249, 0.5)';
+                }
+
                 const isVerified = app.status === 'Verified';
                 
                 const checkedAttr = isVerified ? 'checked' : '';
@@ -436,7 +599,10 @@
                     </td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600;" onchange="updateName(${index}, this.value)">
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                ${app.source === 'imported' ? '<span style="font-size: 10px; padding: 2px 4px; background: #94a3b8; color: white; border-radius: 4px; font-weight: 700;">LOCAL</span>' : ''}
+                                <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600; flex: 1;" onchange="updateName(${index}, this.value)">
+                            </div>
                             <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; color: ${isVerified ? 'var(--text-muted)' : 'var(--error)'};" onchange="updatePackage(${index}, this.value)">
                         </div>
                     </td>
@@ -448,7 +614,6 @@
             });
 
             document.getElementById('mainLayout').style.display = 'grid';
-            document.getElementById('exportConfig').style.display = 'grid';
         }
 
         async function manualAiResolve(index) {
@@ -456,9 +621,11 @@
             const apiKey = document.getElementById('apiKey').value;
             const modelName = document.getElementById('modelName').value;
             
-            if(!apiKey) return alert("Please enter API Key");
+            if(!apiKey) return showToast("Please enter API Key", 'error');
             
             const aiLink = document.getElementById(`ai-link-${index}`);
+            if(!aiLink) return; // safety
+            
             const originalText = aiLink.innerHTML;
             aiLink.innerHTML = "⏳ AI Working...";
             aiLink.style.pointerEvents = "none";
@@ -490,18 +657,24 @@
                         await updatePackage(index, data.package_id);
                         showAppPreview(data.package_id, index);
 
-                        aiLink.innerHTML = "✅ Resolved";
-                        aiLink.style.color = "var(--success)";
+                        if (currentResults[index].status === 'Verified') {
+                            aiLink.innerHTML = "✅ Resolved";
+                            aiLink.style.color = "var(--success)";
+                        } else {
+                            aiLink.innerHTML = "❌ Failed";
+                            aiLink.style.color = "var(--error)";
+                            showToast("AI found an ID, but it could not be verified.", 'error', 'Verification Failed');
+                        }
                     }
                 } else {
                     aiLink.innerHTML = "❌ Not Found";
                     aiLink.style.color = "var(--error)";
-                    alert("AI could not find a reliable package ID.");
+                    showToast("AI could not find a reliable package ID.", 'error', 'Not Found');
                 }
             } catch (e) {
                 aiLink.innerHTML = "⚠️ Error";
                 aiLink.style.color = "var(--error)";
-                alert("AI Resolve Error: " + e.message);
+                showToast("AI Resolve Error: " + e.message, 'error');
             } finally {
                 aiLink.style.pointerEvents = "auto";
                 aiLink.style.opacity = "1";
@@ -611,6 +784,7 @@
                         if (pkgInput) {
                             pkgInput.value = data.package_id;
                             updatePackage(index, data.package_id);
+                            showToast(`Package found: ${data.package_id}`, 'success');
                         }
                     } else {
                         // Not found - ensure it stays cleared and red
@@ -623,6 +797,7 @@
                         if (linkElement) {
                             linkElement.innerText = "Search Store ↗";
                         }
+                        showToast("Could not automatically find package ID", 'info');
                     }
                 } catch (e) {
                     console.error("Discovery error", e);
@@ -630,6 +805,7 @@
                         statusCell.innerText = "Error";
                         statusCell.className = "status-badge Error";
                     }
+                    showToast("Discovery error: " + e.message, 'error');
                 }
             }
         }
@@ -675,11 +851,32 @@
                     if (checkbox) {
                         checkbox.checked = true;
                     }
+                    // Remove AI button if it exists
+                    const existingAiBtn = document.getElementById(`ai-link-${index}`);
+                    if (existingAiBtn) {
+                        existingAiBtn.remove();
+                    }
+                    
+                    // Auto-show preview
+                    showAppPreview(newValue, index);
                 } else {
                     const row = document.getElementById(`row-${index}`);
                     const checkbox = row ? row.querySelector('.app-checkbox') : null;
                     if (checkbox) {
                         checkbox.checked = false;
+                    }
+                    // Add AI button if it doesn't exist
+                    const existingAiBtn = document.getElementById(`ai-link-${index}`);
+                    if (!existingAiBtn) {
+                        // find link container - linkElement is the a tag, parent is the div
+                        const linkContainer = linkElement.parentElement;
+                        const aiBtn = document.createElement('button');
+                        aiBtn.id = `ai-link-${index}`;
+                        aiBtn.onclick = (e) => { e.preventDefault(); manualAiResolve(index); };
+                        aiBtn.className = "btn btn-secondary";
+                        aiBtn.style.cssText = "font-size: 0.7rem; padding: 4px 8px; margin-top: 8px; width: 100%; white-space: nowrap;";
+                        aiBtn.innerText = "✨ AI Resolve";
+                        linkContainer.appendChild(aiBtn);
                     }
                 }
             } catch (e) {
@@ -690,8 +887,11 @@
 
         function toggleListName(checked) {
             const ln = document.getElementById('exportListName');
-            ln.disabled = !checked;
-            ln.style.opacity = checked ? '1' : '0.5';
+            const group = document.getElementById('listNameGroup');
+            if (ln) {
+                ln.disabled = !checked;
+                if (group) group.style.opacity = checked ? '1' : '0.4';
+            }
         }
 
         function generateExportData() {
@@ -743,25 +943,402 @@
                 document.body.appendChild(dl);
                 dl.click();
                 dl.remove();
+                showToast("JSON Exported Successfully!", 'success');
             } catch (e) {
-                alert(e.message);
+                showToast(e.message, 'error', 'Export Failed');
+            }
+        }
+
+        // --- JSON Import & Merge Logic ---
+        let importedJsonData = null;
+        let importedFileName = null;
+
+        async function loadJsonFile() {
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+            if (!file) return showToast("Please select a JSON file first.", 'error');
+
+            try {
+                const text = await file.text();
+                importedJsonData = JSON.parse(text);
+                importedFileName = file.name; // Store the original filename
+                
+                // Save to localStorage for persistence
+                localStorage.setItem('lastImportedJson', text);
+                localStorage.setItem('lastImportedFileName', file.name);
+                
+                // Display the filename
+                document.getElementById('importedFileName').innerText = `Loaded: ${file.name}`;
+                
+                // Update dropdown
+                updateCategoryDropdown();
+                
+                showToast(`JSON Loaded: ${file.name}`, 'success');
+
+                // Reset input so re-selecting same file works
+                fileInput.value = '';
+
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to parse JSON: " + e.message, 'error');
+            }
+        }
+
+        function restoreLastImportedJson() {
+            const savedJson = localStorage.getItem('lastImportedJson');
+            const savedFileName = localStorage.getItem('lastImportedFileName');
+            
+            if (savedJson && savedFileName) {
+                try {
+                    importedJsonData = JSON.parse(savedJson);
+                    importedFileName = savedFileName;
+                    
+                    // Display the filename
+                    document.getElementById('importedFileName').innerText = `Loaded: ${savedFileName}`;
+                    
+                    // Update dropdown
+                    updateCategoryDropdown();
+                    
+                    console.log(`Auto-restored JSON file: ${savedFileName}`);
+                } catch (e) {
+                    console.error('Failed to restore saved JSON:', e);
+                    localStorage.removeItem('lastImportedJson');
+                    localStorage.removeItem('lastImportedFileName');
+                }
+            }
+        }
+
+        function updateCategoryDropdown() {
+            const select = document.getElementById('importCategorySelect');
+            const container = document.getElementById('categoryLoader');
+            const noMsg = document.getElementById('noLoaderMsg');
+            
+            if (!importedJsonData || Object.keys(importedJsonData).length === 0) {
+                if (container) container.style.display = 'none';
+                if (noMsg) noMsg.style.display = 'block';
+                return;
+            }
+
+            // Clear except first
+            select.innerHTML = '<option value="">-- Choose Existing Category --</option>';
+            
+            let categories = [];
+            if (importedJsonData.AppList) {
+                categories = Object.keys(importedJsonData.AppList);
+            } else if (importedJsonData.data && Array.isArray(importedJsonData.data)) {
+                // Special case for files that just have a "data" array
+                categories = ["data"];
+            } else {
+                // If it's a flat structure (like the exported individual files)
+                categories = Object.keys(importedJsonData).filter(key => {
+                    const val = importedJsonData[key];
+                    if (!val || typeof val !== 'object') return false;
+                    // Either it has a .list property, or it is an array (likely a raw list)
+                    return val.list || Array.isArray(val);
+                });
+            }
+
+            if (categories.length > 0) {
+                categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.innerText = cat;
+                    select.appendChild(opt);
+                });
+                if (container) container.style.display = 'block';
+                if (noMsg) noMsg.style.display = 'none';
+            } else {
+                if (container) container.style.display = 'none';
+                if (noMsg) noMsg.style.display = 'block';
+            }
+        }
+
+        function onCategorySelect() {
+            const catKey = document.getElementById('importCategorySelect').value;
+            if (!catKey || !importedJsonData) return;
+
+            // Locate the category object
+            let categoryObj = null;
+            if (importedJsonData.AppList && importedJsonData.AppList[catKey]) {
+                categoryObj = importedJsonData.AppList[catKey];
+            } else if (importedJsonData[catKey]) {
+                categoryObj = importedJsonData[catKey];
+            }
+
+            if (categoryObj) {
+                // Populate fields
+                document.getElementById('groupKey').value = catKey;
+                
+                // Count & Threshold - Use values from JSON or defaults
+                document.getElementById('exportCount').value = categoryObj.count !== undefined ? categoryObj.count : 1;
+                document.getElementById('exportThreshold').value = categoryObj.threshold !== undefined ? categoryObj.threshold : 1.0;
+
+                // MS Name / List Name - Use values from JSON or blank
+                document.getElementById('exportMsName').value = categoryObj.msName || "";
+                document.getElementById('exportListName').value = categoryObj.listName || "";
+                
+                // isList - Set based on JSON or default to false
+                const isListCheck = document.getElementById('exportIsList');
+                isListCheck.checked = !!categoryObj.isList;
+                toggleListName(isListCheck.checked);
+                
+                // LOAD APPS INTO TABLE
+                let appList = [];
+                if (Array.isArray(categoryObj)) {
+                    appList = categoryObj;
+                } else if (categoryObj.list && Array.isArray(categoryObj.list)) {
+                    appList = categoryObj.list;
+                }
+
+                if (appList.length > 0) {
+                    importedResults = appList.map(app => ({
+                        name: app.name || "Unknown",
+                        package: app.package || "",
+                        weight: app.weight || 1.0,
+                        status: "Verified", // Default to verified if coming from a curated list
+                        play_store_url: `https://play.google.com/store/apps/details?id=${app.package}`,
+                        source: 'imported'
+                    }));
+                    currentResults = [...researchResults, ...importedResults];
+                    renderTable(currentResults);
+                    showToast(`Loaded ${importedResults.length} apps and settings for "${catKey}"`, 'success');
+                } else {
+                    // If no list, clear only the imported results
+                    importedResults = [];
+                    currentResults = [...researchResults, ...importedResults];
+                    renderTable(currentResults);
+                    showToast(`Loaded settings for "${catKey}" (No app list found)`, 'info');
+                }
+            }
+        }
+
+        function mergeAndExport() {
+            if (!importedJsonData) return showToast("No JSON loaded.", 'error');
+            const catKey = document.getElementById('importCategorySelect').value;
+            if (!catKey) return showToast("Please select a category to merge into.", 'error');
+
+            try {
+                // 1. Get current apps to export
+                const exportResult = generateExportData();
+                const groupKey = exportResult.groupKey;
+                const currentCategoryData = exportResult[groupKey]; // This contains count, threshold, isList, msName, listName, list
+                const newApps = currentCategoryData.list || [];
+
+                // 2. Locate import category
+                let targetRoot = importedJsonData.AppList ? importedJsonData.AppList : importedJsonData;
+                let targetCategory = targetRoot[catKey];
+
+                if (!targetCategory) {
+                    // Create if doesn't exist? (The dropdown ensures it exists, but just in case)
+                   throw new Error(`Category "${catKey}" not found in imported JSON structure.`);
+                }
+
+                // 3. Merge Lists (Deduplicate by package)
+                const existingApps = targetCategory.list || [];
+                const packageMap = new Map();
+                
+                existingApps.forEach(app => packageMap.set(app.package, app));
+                newApps.forEach(app => {
+                    // Overwrite or ignore duplicates? Let's overwrite/update weight if same package
+                    packageMap.set(app.package, app);
+                });
+
+                const mergedList = Array.from(packageMap.values());
+
+                // 4. Update the target category object with NEW values from inputs (and merged list)
+                targetCategory.count = currentCategoryData.count;
+                targetCategory.threshold = currentCategoryData.threshold;
+                targetCategory.isList = currentCategoryData.isList;
+                targetCategory.msName = currentCategoryData.msName;
+                if(currentCategoryData.isList && currentCategoryData.listName) {
+                    targetCategory.listName = currentCategoryData.listName;
+                }
+                targetCategory.list = mergedList;
+
+                // 5. Download the FULL json with original filename
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(importedJsonData, null, 2));
+                const dl = document.createElement('a');
+                dl.setAttribute("href", dataStr);
+                dl.setAttribute("download", importedFileName || "merged_" + catKey + ".json");
+                document.body.appendChild(dl);
+                dl.click();
+                dl.remove();
+                
+                showToast(`Merged ${newApps.length} new/updated apps into "${catKey}"!`, 'success');
+
+            } catch (e) {
+                showToast("Merge Failed: " + e.message, 'error');
             }
         }
 
         function viewJson() {
             try {
-                const { groupKey, ...finalOutput } = generateExportData();
-                document.getElementById('jsonContent').innerText = JSON.stringify(finalOutput, null, 2);
+                let jsonToShow;
+                let title = '📦 Research Data Preview';
+                
+                // Show the full accumulated JSON if available, otherwise current selection
+                if (importedJsonData && importedJsonData.AppList && Object.keys(importedJsonData.AppList).length > 0) {
+                    jsonToShow = importedJsonData;
+                    const categoryCount = Object.keys(importedJsonData.AppList).length;
+                    const totalApps = Object.values(importedJsonData.AppList).reduce((sum, cat) => sum + (cat.list?.length || 0), 0);
+                    title = `📦 Local JSON - ${categoryCount} Categories, ${totalApps} Apps`;
+                } else {
+                    const { groupKey, ...finalOutput } = generateExportData();
+                    jsonToShow = finalOutput;
+                    title = '📦 Current Selection Preview';
+                }
+                
+                document.getElementById('jsonModal').querySelector('.modal-title').innerText = title;
+                document.getElementById('jsonContent').innerText = JSON.stringify(jsonToShow, null, 2);
                 document.getElementById('jsonModal').style.display = 'flex';
                 document.body.style.overflow = 'hidden'; // Prevent scrolling
             } catch (e) {
-                alert(e.message);
+                showToast(e.message, 'error', 'Preview Failed');
             }
         }
 
         function closeModal() {
             document.getElementById('jsonModal').style.display = 'none';
             document.body.style.overflow = 'auto'; // Restore scrolling
+        }
+
+        function updateLocalCopy() {
+            try {
+                const exportResult = generateExportData();
+                const groupKey = exportResult.groupKey;
+                const currentCategoryData = exportResult[groupKey];
+                const newApps = currentCategoryData.list || [];
+
+                // Initialize importedJsonData if it doesn't exist
+                if (!importedJsonData) {
+                    importedJsonData = { AppList: {} };
+                    importedFileName = "research_data.json";
+                }
+
+                // Ensure AppList structure exists
+                if (!importedJsonData.AppList) {
+                    importedJsonData.AppList = {};
+                }
+
+                // Get or create the target category
+                let targetCategory = importedJsonData.AppList[groupKey];
+                if (!targetCategory) {
+                    targetCategory = {
+                        count: currentCategoryData.count,
+                        threshold: currentCategoryData.threshold,
+                        isList: currentCategoryData.isList,
+                        msName: currentCategoryData.msName,
+                        list: []
+                    };
+                    if (currentCategoryData.isList && currentCategoryData.listName) {
+                        targetCategory.listName = currentCategoryData.listName;
+                    }
+                    importedJsonData.AppList[groupKey] = targetCategory;
+                }
+
+                // Update category parameters
+                targetCategory.count = currentCategoryData.count;
+                targetCategory.threshold = currentCategoryData.threshold;
+                targetCategory.isList = currentCategoryData.isList;
+                targetCategory.msName = currentCategoryData.msName;
+                if (currentCategoryData.isList && currentCategoryData.listName) {
+                    targetCategory.listName = currentCategoryData.listName;
+                }
+
+                // Merge apps with deduplication
+                const existingApps = targetCategory.list || [];
+                const packageMap = new Map();
+                
+                // Add existing apps to map
+                existingApps.forEach(app => packageMap.set(app.package, app));
+                
+                // Add/update new apps (overwrites if package already exists)
+                let addedCount = 0;
+                let updatedCount = 0;
+                newApps.forEach(app => {
+                    if (packageMap.has(app.package)) {
+                        updatedCount++;
+                    } else {
+                        addedCount++;
+                    }
+                    packageMap.set(app.package, app);
+                });
+
+                targetCategory.list = Array.from(packageMap.values());
+
+                // Save to localStorage
+                localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
+                localStorage.setItem('lastImportedFileName', importedFileName);
+
+                showToast(`Updated "${groupKey}": ${addedCount} added, ${updatedCount} updated. Total: ${targetCategory.list.length} apps`, 'success', 'Local Copy Updated');
+
+            } catch (e) {
+                showToast("Update Failed: " + e.message, 'error');
+            }
+        }
+
+        function exportFullJson() {
+            try {
+                if (!importedJsonData || !importedJsonData.AppList || Object.keys(importedJsonData.AppList).length === 0) {
+                    showToast("No data to export. Use 'Update Local Copy' first.", 'error');
+                    return;
+                }
+
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(importedJsonData, null, 2));
+                const dl = document.createElement('a');
+                dl.setAttribute("href", dataStr);
+                dl.setAttribute("download", importedFileName || "research_data.json");
+                document.body.appendChild(dl);
+                dl.click();
+                dl.remove();
+                
+                const categoryCount = Object.keys(importedJsonData.AppList).length;
+                const totalApps = Object.values(importedJsonData.AppList).reduce((sum, cat) => sum + (cat.list?.length || 0), 0);
+                showToast(`Exported ${categoryCount} categories with ${totalApps} total apps`, 'success', 'Export Complete');
+            } catch (e) {
+                showToast(e.message, 'error', 'Export Failed');
+            }
+        }
+
+        function clearLocalJson() {
+            if (!confirm('Are you sure you want to clear all local JSON data? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                // Clear localStorage
+                localStorage.removeItem('lastImportedJson');
+                localStorage.removeItem('lastImportedFileName');
+                
+                // Clear in-memory data
+                importedJsonData = null;
+                importedFileName = null;
+                
+                // Clear UI display
+                document.getElementById('importedFileName').innerText = '';
+                
+                // Reset file input so re-selecting same file triggers onchange
+                const fileInput = document.getElementById('importFile');
+                if (fileInput) fileInput.value = '';
+                
+                // Hide category loader and clear dropdown
+                const loader = document.getElementById('categoryLoader');
+                if (loader) loader.style.display = 'none';
+                const noMsg = document.getElementById('noLoaderMsg');
+                if (noMsg) noMsg.style.display = 'block';
+                
+                const select = document.getElementById('importCategorySelect');
+                if (select) select.innerHTML = '<option value="">-- Choose Existing Category --</option>';
+
+                // Clear imported results and refresh table (preserving research results)
+                importedResults = [];
+                currentResults = [...researchResults, ...importedResults];
+                renderTable(currentResults);
+                
+                showToast('Local JSON data cleared successfully', 'success', 'Cleared');
+            } catch (e) {
+                showToast('Failed to clear local JSON: ' + e.message, 'error', 'Clear Failed');
+            }
         }
     </script>
     <style>
