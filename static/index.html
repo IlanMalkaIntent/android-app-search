@@ -220,7 +220,7 @@
         .btn-gear { background: #f1f5f9; color: #475569; width: 46px; height: 46px; padding: 0; font-size: 1.25rem; }
         .btn-gear:hover { background: #e2e8f0; color: #1e293b; }
 
-        .top-controls-grid { display: grid; grid-template-columns: 1fr 140px auto auto; gap: 16px; align-items: flex-end; }
+        .top-controls-grid { display: grid; grid-template-columns: 1fr 140px auto auto auto; gap: 16px; align-items: flex-end; }
         .dataset-header-row { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); align-items: center; }
         .export-header-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--border); }
         
@@ -289,6 +289,7 @@
                 <input type="text" id="region" placeholder="US, IL, SG..." value="">
             </div>
             <button onclick="toggleSettings(true)" class="btn btn-secondary btn-gear" title="Settings" style="margin-bottom: 2px;">⚙️</button>
+            <button onclick="clearResearchResults()" class="btn btn-secondary" title="Clear Research Results" style="height: 46px; margin-bottom: 2px; background: #94a3b8;">🗑️ Clear</button>
             <button onclick="performSearch()" id="searchBtn" class="btn btn-primary" style="height: 46px; margin-bottom: 2px;">🚀 Start Research</button>
         </div>
 
@@ -311,6 +312,7 @@
 
             <div class="action-btns" id="exportSection">
                 <button onclick="updateLocalCopy()" class="btn btn-secondary" style="background: #10b981; border:none;" title="Save changes to current memory">💾 Update Local</button>
+                <button id="revertBtn" onclick="revertLocalCopy()" class="btn btn-secondary" style="background: #64748b; border:none; display:none;" title="Restore state before last update">↩️ Revert</button>
                 <button onclick="exportJson()" class="btn btn-primary" title="Export final JSON file">⬇️ Download JSON</button>
                 <button onclick="clearLocalJson()" class="btn btn-secondary" style="background: #ef4444; border:none;" title="Clear memory">🗑️ Clear</button>
             </div>
@@ -421,6 +423,8 @@
         let researchResults = [];
         let importedResults = [];
         let lastViewedApp = null;
+        let lastJsonBackup = null; // Store previous state for revert
+        let lastUpdateSummary = null; // Store summary of last applied changes
 
         function showToast(message, type = 'info', title = '') {
             const container = document.getElementById('toast-container');
@@ -982,13 +986,20 @@
                 }
                 
                 if (linkElement) {
-                    linkElement.innerText = isOk ? 'View Profile ↗' : 'Search Store ↗';
-                    linkElement.onclick = (e) => {
-                        if (isOk) {
+                    if (isOk) {
+                        linkElement.innerText = 'View Profile ↗';
+                        linkElement.href = "#";
+                        linkElement.target = "";
+                        linkElement.onclick = (e) => {
+                            e.preventDefault();
                             showAppPreview(currentResults[index].package, index);
-                            return false;
-                        }
-                    };
+                        };
+                    } else {
+                        linkElement.innerText = 'Search Store ↗';
+                        linkElement.href = `https://play.google.com/store/search?q=${encodeURIComponent(currentResults[index].name)}&c=apps`;
+                        linkElement.target = "_blank";
+                        linkElement.onclick = null;
+                    }
                 }
 
                 if (isOk) {
@@ -1101,8 +1112,9 @@
                 let fileName;
 
                 // If we have a local dataset loaded, export the whole thing
-                if (importedJsonData && importedJsonData.AppList && Object.keys(importedJsonData.AppList).length > 0) {
-                    dataToExport = importedJsonData;
+                const root = getImportRoot(importedJsonData);
+                if (root && root.AppList && Object.keys(root.AppList).length > 0) {
+                    dataToExport = importedJsonData; // We export the FULL original structure
                     fileName = importedFileName || "research_data_complete.json";
                 } else {
                     // Otherwise export the current category results
@@ -1132,6 +1144,17 @@
         let importedJsonData = null;
         let importedFileName = null;
 
+        function getImportRoot(data) {
+            if (!data) return null;
+            // Support for the nested structure: {"AnagogDefaultConfig":{"MSConfiguration":{"DeepMS": ... }}}
+            if (data.AnagogDefaultConfig && 
+                data.AnagogDefaultConfig.MSConfiguration && 
+                data.AnagogDefaultConfig.MSConfiguration.DeepMS) {
+                return data.AnagogDefaultConfig.MSConfiguration.DeepMS;
+            }
+            return data;
+        }
+
         async function loadJsonFile() {
             const fileInput = document.getElementById('importFile');
             const file = fileInput.files[0];
@@ -1152,6 +1175,11 @@
                 // Update dropdown
                 updateCategoryDropdown();
                 
+                // Clear the previously imported apps list since a new file is loaded
+                importedResults = [];
+                currentResults = [...researchResults, ...importedResults];
+                renderTable(currentResults);
+
                 showToast(`JSON Loaded: ${file.name}`, 'success');
 
                 // Reset input so re-selecting same file works
@@ -1211,16 +1239,20 @@
             // Clear except first
             select.innerHTML = '<option value="">-- Choose Existing Category --</option>';
             
+            // --- DRILL DOWN ---
+            const root = getImportRoot(importedJsonData);
+            if (!root) return;
+
             let categories = [];
-            if (importedJsonData.AppList) {
-                categories = Object.keys(importedJsonData.AppList);
-            } else if (importedJsonData.data && Array.isArray(importedJsonData.data)) {
+            if (root.AppList) {
+                categories = Object.keys(root.AppList);
+            } else if (root.data && Array.isArray(root.data)) {
                 // Special case for files that just have a "data" array
                 categories = ["data"];
             } else {
                 // If it's a flat structure (like the exported individual files)
-                categories = Object.keys(importedJsonData).filter(key => {
-                    const val = importedJsonData[key];
+                categories = Object.keys(root).filter(key => {
+                    const val = root[key];
                     if (!val || typeof val !== 'object') return false;
                     // Either it has a .list property, or it is an array (likely a raw list)
                     return val.list || Array.isArray(val);
@@ -1246,12 +1278,16 @@
             const catKey = document.getElementById('importCategorySelect').value;
             if (!catKey || !importedJsonData) return;
 
+            // --- DRILL DOWN ---
+            const root = getImportRoot(importedJsonData);
+            if (!root) return;
+
             // Locate the category object
             let categoryObj = null;
-            if (importedJsonData.AppList && importedJsonData.AppList[catKey]) {
-                categoryObj = importedJsonData.AppList[catKey];
-            } else if (importedJsonData[catKey]) {
-                categoryObj = importedJsonData[catKey];
+            if (root.AppList && root.AppList[catKey]) {
+                categoryObj = root.AppList[catKey];
+            } else if (root[catKey]) {
+                categoryObj = root[catKey];
             }
 
             if (categoryObj) {
@@ -1324,7 +1360,9 @@
                             isDuplicate: false,
                             checked: app.status === 'Verified' || !app.status, // maintain selection if verified
                             play_store_url: `https://play.google.com/store/apps/details?id=${pkg}`,
-                            source: 'imported'
+                            source: 'imported',
+                            originalName: app.name || "Unknown",
+                            originalPackage: pkg
                         });
                     });
 
@@ -1380,7 +1418,8 @@
                 document.getElementById('tab-json').classList.add('active');
 
                 // Show the full accumulated JSON if available, otherwise current selection
-                if (importedJsonData && importedJsonData.AppList && Object.keys(importedJsonData.AppList).length > 0) {
+                const root = getImportRoot(importedJsonData);
+                if (root && (root.AppList || Object.keys(root).length > 0)) {
                     jsonToShow = importedJsonData;
                 } else {
                     const { groupKey, ...finalOutput } = generateExportData();
@@ -1428,14 +1467,76 @@
                     importedFileName = "research_data.json";
                 }
 
-                // Ensure AppList structure exists
-                if (!importedJsonData.AppList) {
-                    importedJsonData.AppList = {};
+                // Ensure AppList structure exists in the effective root
+                const root = getImportRoot(importedJsonData);
+                if (!root.AppList) {
+                    root.AppList = {};
                 }
 
-                // Get or create the target category
-                let targetCategory = importedJsonData.AppList[groupKey];
-                if (!targetCategory) {
+
+                // Get the target category via the root
+                let targetCategory = root.AppList[groupKey];
+                let isNewCategory = !targetCategory;
+                
+                // --- PREPARE CHANGE DESCRIPTION ---
+                let changeLog = [];
+                if (isNewCategory) {
+                    changeLog.push(`✨ Creating NEW category: "${groupKey}"`);
+                    changeLog.push(`📝 Adding ${newApps.length} selected apps.`);
+                } else {
+                    changeLog.push(`📂 Updating existing category: "${groupKey}"`);
+                    
+                    // Check for parameter changes
+                    if (targetCategory.count != currentCategoryData.count) changeLog.push(`🔢 Min Apps: ${targetCategory.count} -> ${currentCategoryData.count}`);
+                    if (targetCategory.threshold != currentCategoryData.threshold) changeLog.push(`⚖️ Min Weight: ${targetCategory.threshold} -> ${currentCategoryData.threshold}`);
+                    if (targetCategory.msName !== currentCategoryData.msName) changeLog.push(`🏷️ MS Name: "${targetCategory.msName || ''}" -> "${currentCategoryData.msName || ''}"`);
+                    if (targetCategory.isList !== currentCategoryData.isList) changeLog.push(`📋 isList: ${targetCategory.isList} -> ${currentCategoryData.isList}`);
+
+                    // Check for app changes
+                    let addedCount = 0;
+                    let removedCount = 0;
+                    let editedCount = 0;
+
+                    currentResults.forEach(app => {
+                        if (app.source === 'imported') {
+                            if (!app.checked) {
+                                removedCount++;
+                            } else {
+                                const isEdited = (app.name !== app.originalName) || (app.package !== app.originalPackage);
+                                if (isEdited) editedCount++;
+                            }
+                        } else if (app.source === 'research' && app.checked) {
+                            addedCount++;
+                        }
+                    });
+                    
+                    if (addedCount > 0) changeLog.push(`➕ Adding ${addedCount} new apps.`);
+                    if (removedCount > 0) changeLog.push(`➖ Removing ${removedCount} unselected apps.`);
+                    if (editedCount > 0) changeLog.push(`✏️ Updating ${editedCount} edited apps.`);
+                    
+                    if (addedCount === 0 && removedCount === 0 && editedCount === 0 && newApps.length > 0) {
+                        changeLog.push(`✅ No changes to app list detected.`);
+                    }
+                }
+
+                if (newApps.length === 0 && !isNewCategory) {
+                    changeLog.push(`⚠️ WARNING: This will clear ALL apps from this category!`);
+                }
+
+                // SHOW CONFIRMATION
+                const message = `Do you want to apply these changes to the local dataset?\n\n` + changeLog.join('\n');
+                if (message && !confirm(message)) return;
+
+                // --- BACKUP BEFORE APPLYING (moved from before confirm) ---
+                lastJsonBackup = JSON.parse(JSON.stringify(importedJsonData));
+                lastUpdateSummary = {
+                    category: groupKey,
+                    changes: changeLog
+                };
+                document.getElementById('revertBtn').style.display = 'inline-block';
+
+                // --- APPLY CHANGES ---
+                if (isNewCategory) {
                     targetCategory = {
                         count: currentCategoryData.count,
                         threshold: currentCategoryData.threshold,
@@ -1446,7 +1547,7 @@
                     if (currentCategoryData.isList && currentCategoryData.listName) {
                         targetCategory.listName = currentCategoryData.listName;
                     }
-                    importedJsonData.AppList[groupKey] = targetCategory;
+                    root.AppList[groupKey] = targetCategory;
                 }
 
                 // Update category parameters
@@ -1462,6 +1563,24 @@
                 const previousCount = targetCategory.list?.length || 0;
                 targetCategory.list = newApps;
 
+                // Sync the UI memory: items that were just added move from research -> imported
+                // and original metadata is updated to current values for accurate subsequent diffs
+                researchResults = researchResults.filter(app => !app.checked);
+                
+                // Re-build importedResults from the new targetCategory.list
+                importedResults = (targetCategory.list || []).map(app => ({
+                    ...app,
+                    status: 'Verified', // Since it was checked/saved
+                    source: 'imported',
+                    checked: true,
+                    originalName: app.name,
+                    originalPackage: app.package,
+                    play_store_url: `https://play.google.com/store/apps/details?id=${app.package}`
+                }));
+
+                currentResults = [...researchResults, ...importedResults];
+                renderTable(currentResults);
+
                 // Save to localStorage
                 localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
                 localStorage.setItem('lastImportedFileName', importedFileName);
@@ -1474,6 +1593,7 @@
                 }
 
             } catch (e) {
+                console.error(e);
                 showToast("Update Failed: " + e.message, 'error');
             }
         }
@@ -1517,6 +1637,59 @@
                 showToast('Local JSON data cleared successfully', 'success', 'Cleared');
             } catch (e) {
                 showToast('Failed to clear local JSON: ' + e.message, 'error', 'Clear Failed');
+            }
+        }
+
+        function clearResearchResults() {
+            if (researchResults.length === 0) return;
+            if (!confirm('Clear all research results? This will not affect your imported local list.')) {
+                return;
+            }
+            researchResults = [];
+            currentResults = [...researchResults, ...importedResults];
+            renderTable(currentResults);
+            showToast('Research results cleared', 'info');
+        }
+
+        function revertLocalCopy() {
+            if (!lastJsonBackup) return showToast("No backup available to revert.", "error");
+            
+            if (!confirm("Revert to the state before the last update? All changes made in the last 'Update Local' session will be lost.")) {
+                return;
+            }
+
+            try {
+                importedJsonData = lastJsonBackup;
+                const restoredSummary = lastUpdateSummary;
+                lastJsonBackup = null; // Consume backup
+                lastUpdateSummary = null;
+                document.getElementById('revertBtn').style.display = 'none';
+
+                // Save to localStorage
+                localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
+                
+                // Refresh categories and current view
+                const categoryToRestore = restoredSummary ? restoredSummary.category : document.getElementById('importCategorySelect').value;
+                
+                updateCategoryDropdown();
+                
+                // Re-select the category to refresh the table with reverted data
+                if (categoryToRestore) {
+                    const select = document.getElementById('importCategorySelect');
+                    if (select) {
+                        select.value = categoryToRestore;
+                        onCategorySelect();
+                    }
+                } else {
+                    currentResults = [...researchResults, ...importedResults];
+                    renderTable(currentResults);
+                }
+
+                let infoMsg = restoredSummary ? `Restored "${restoredSummary.category}":\n` + restoredSummary.changes.join('\n') : "Reverted to previous state";
+                showToast(infoMsg, "success", "Undo Successful");
+            } catch (e) {
+                console.error(e);
+                showToast("Revert Failed: " + e.message, "error");
             }
         }
 
