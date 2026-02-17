@@ -6,6 +6,77 @@ from google.genai import types
 from google_play_scraper import app as scrapper_app
 from google_play_scraper import search as scrapper_search
 
+COUNTRY_CODES_MAP = {
+    "afghanistan": "AF", "aland islands": "AX", "albania": "AL", "algeria": "DZ", "american samoa": "AS",
+    "andorra": "AD", "angola": "AO", "anguilla": "AI", "antarctica": "AQ", "antigua and barbuda": "AG",
+    "argentina": "AR", "armenia": "AM", "aruba": "AW", "australia": "AU", "austria": "AT",
+    "azerbaijan": "AZ", "bahamas": "BS", "bahrain": "BH", "bangladesh": "BD", "barbados": "BB",
+    "belarus": "BY", "belgium": "BE", "belize": "BZ", "benin": "BJ", "bermuda": "BM",
+    "bhutan": "BT", "bolivia": "BO", "bonaire, sint eustatius and saba": "BQ", "bosnia and herzegovina": "BA", "botswana": "BW",
+    "bouvet island": "BV", "brazil": "BR", "british indian ocean territory": "IO", "brunei darussalam": "BN", "bulgaria": "BG",
+    "burkina faso": "BF", "burundi": "BI", "cabo verde": "CV", "cambodia": "KH", "cameroon": "CM",
+    "canada": "CA", "cayman islands": "KY", "central african republic": "CF", "chad": "TD", "chile": "CL",
+    "china": "CN", "christmas island": "CX", "cocos (keeling) islands": "CC", "colombia": "CO", "comoros": "KM",
+    "congo": "CG", "congo, democratic republic of the": "CD", "cook islands": "CK", "costa rica": "CR", "cote d'ivoire": "CI",
+    "croatia": "HR", "cuba": "CU", "curacao": "CW", "cyprus": "CY", "czechia": "CZ", "denmark": "DK",
+    "djibouti": "DJ", "dominica": "DM", "dominican republic": "DO", "ecuador": "EC", "egypt": "EG",
+    "el salvador": "SV", "equatorial guinea": "GQ", "eritrea": "ER", "estonia": "EE", "eswatini": "SZ",
+    "ethiopia": "ET", "falkland islands (malvinas)": "FK", "faroe islands": "FO", "fiji": "FJ", "finland": "FI",
+    "france": "FR", "french guiana": "GF", "french polynesia": "PF", "french southern territories": "TF", "gabon": "GA",
+    "gambia": "GM", "georgia": "GE", "germany": "DE", "ghana": "GH", "gibraltar": "GI",
+    "greece": "GR", "greenland": "GL", "grenada": "GD", "guadeloupe": "GP", "guam": "GU",
+    "guatemala": "GT", "guernsey": "GG", "guinea": "GN", "guinea-bissau": "GW", "guyana": "GY",
+    "haiti": "HT", "heard island and mcdonald islands": "HM", "holy see": "VA", "honduras": "HN", "hong kong": "HK",
+    "hungary": "HU", "iceland": "IS", "india": "IN", "indonesia": "ID", "iran": "IR",
+    "iraq": "IQ", "ireland": "IE", "isle of man": "IM", "israel": "IL", "italy": "IT",
+    "jamaica": "JM", "japan": "JP", "jersey": "JE", "jordan": "JO", "kazakhstan": "KZ",
+    "kenya": "KE", "kiribati": "KI", "korea, democratic people's republic of": "KP", "korea, republic of": "KR", "south korea": "KR",
+    "kuwait": "KW", "kyrgyzstan": "KG", "lao people's democratic republic": "LA", "latvia": "LV", "lebanon": "LB",
+    "lesotho": "LS", "liberia": "LR", "libya": "LY", "liechtenstein": "LI", "lithuania": "LT",
+    "luxembourg": "LU", "macao": "MO", "madagascar": "MG", "malawi": "MW", "malaysia": "MY",
+    "maldives": "MV", "mali": "ML", "malta": "MT", "marshall islands": "MH", "martinique": "MQ",
+    "mauritania": "MR", "mauritius": "MU", "mayotte": "YT", "mexico": "MX", "micronesia": "FM",
+    "moldova": "MD", "monaco": "MC", "mongolia": "MN", "montenegro": "ME", "montserrat": "MS",
+    "morocco": "MA", "mozambique": "MZ", "myanmar": "MM", "namibia": "NA", "nauru": "NR",
+    "nepal": "NP", "netherlands": "NL", "new caledonia": "NC", "new zealand": "NZ", "nicaragua": "NI",
+    "niger": "NE", "nigeria": "NG", "niue": "NU", "norfolk island": "NF", "northern mariana islands": "MP",
+    "norway": "NO", "oman": "OM", "pakistan": "PK", "palau": "PW", "palestine, state of": "PS",
+    "panama": "PA", "papua new guinea": "PG", "paraguay": "PY", "peru": "PE", "philippines": "PH",
+    "pitcairn": "PN", "poland": "PL", "portugal": "PT", "puerto rico": "PR", "qatar": "QA",
+    "reunion": "RE", "romania": "RO", "russian federation": "RU", "russia": "RU", "rwanda": "RW",
+    "saint barthelemy": "BL", "saint helena, ascension and tristan da cunha": "SH", "saint kitts and nevis": "KN", "saint lucia": "LC",
+    "saint martin (french part)": "MF", "saint pierre and miquelon": "PM", "saint vincent and the grenadines": "VC", "samoa": "WS",
+    "san marino": "SM", "sao tome and principe": "ST", "saudi arabia": "SA", "senegal": "SN", "serbia": "RS",
+    "seychelles": "SC", "sierra leone": "SL", "singapore": "SG", "sint maarten (dutch part)": "SX", "slovakia": "SK",
+    "slovenia": "SI", "solomon islands": "SB", "somalia": "SO", "south africa": "ZA", "south georgia and the south sandwich islands": "GS",
+    "south sudan": "SS", "spain": "ES", "sri lanka": "LK", "sudan": "SD", "suriname": "SR",
+    "svalbard and jan mayen": "SJ", "swaziland": "SZ", "sweden": "SE", "switzerland": "CH", "syrian arab republic": "SY",
+    "taiwan": "TW", "tajikistan": "TJ", "tanzania, united republic of": "TZ", "thailand": "TH", "timor-leste": "TL",
+    "togo": "TG", "tokelau": "TK", "tonga": "TO", "trinidad and tobago": "TT", "tunisia": "TN",
+    "turkey": "TR", "turkmenistan": "TM", "turks and caicos islands": "TC", "tuvalu": "TV", "uganda": "UG",
+    "ukraine": "UA", "united arab emirates": "AE", "united kingdom": "GB", "uk": "GB", "united states": "US", "usa": "US",
+    "united states minor outlying islands": "UM", "uruguay": "UY", "uzbekistan": "UZ", "vanuatu": "VU",
+    "venezuela": "VE", "vietnam": "VN", "virgin islands, british": "VG", "virgin islands, u.s.": "VI", "wallis and futuna": "WF",
+    "western sahara": "EH", "yemen": "YE", "zambia": "ZM", "zimbabwe": "ZW"
+}
+
+def translate_country_to_code(region_name):
+    """
+    Translates a country name to a 2-letter ISO code.
+    If it's already a 2-letter code, returns it.
+    """
+    if not region_name:
+        return "US"
+    
+    clean_name = region_name.strip().lower()
+    
+    # Already a code?
+    if len(clean_name) == 2 and clean_name.isalpha():
+        return clean_name.upper()
+    
+    # Try mapping
+    return COUNTRY_CODES_MAP.get(clean_name, clean_name.upper()) # Return upper version of input if unknown
+
 def get_market_research(topic, region, client, model_name):
     """
     Uses Gemini to generate the initial list of apps.
@@ -65,36 +136,40 @@ def get_market_research(topic, region, client, model_name):
         print(f"Gemini Error: {e}")
         return []
 
-def verify_package_exists(package_name):
+def verify_package_exists(package_name, region="US", use_fallbacks=False):
     """
     Sends an HTTP GET request to the Google Play Store.
-    Returns True if the app exists (Status 200), False otherwise.
+    Returns the successful region code if the app exists, None otherwise.
     """
-    url = f"https://play.google.com/store/apps/details?id={package_name}"
-    
-    # ⚠️ CRITICAL: You must use a 'User-Agent' header.
-    # Without it, Google blocks the request as a bot (Error 403/429).
+    regions_to_try = [region]
+    if use_fallbacks:
+        # Expanding fallbacks to major global markets
+        fallbacks = ["US", "IN", "CN", "BR", "AR", "DE", "ZA"]
+        for f in fallbacks:
+            if f not in regions_to_try:
+                regions_to_try.append(f)
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
-    
-    try:
-        print(f"Checking: {package_name}...", end=" ")
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            print("✅ Exists!")
-            return True
-        elif response.status_code == 404:
-            print("❌ Not Found (404)")
-            return False
-        else:
-            print(f"⚠️ Unexpected Status: {response.status_code}")
-            return False
+
+    for r in regions_to_try:
+        url = f"https://play.google.com/store/apps/details?id={package_name}&gl={r}"
+        try:
+            print(f"Checking: {package_name} (region: {r})...", end=" ")
+            response = requests.get(url, headers=headers, timeout=10)
             
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
+            if response.status_code == 200:
+                print("✅ Exists!")
+                return r
+            elif response.status_code == 404:
+                print("❌ Not Found (404)")
+            else:
+                print(f"⚠️ Unexpected Status: {response.status_code}")
+        except Exception as e:
+            print(f"Error: {e}")
+            
+    return None
 
 def search_play_store_for_id(app_name, region="US"):
     """
@@ -108,33 +183,35 @@ def search_play_store_for_id(app_name, region="US"):
         print(f"Scraper Error: {e}")
     return None
 
-def get_package_by_name(package_name):
+def get_package_by_name(query, region="US"):
     """
-    Sends an HTTP GET request to the Google Play Store.
-    Returns True if the app exists (Status 200), False otherwise.
+    Searches Play Store for a query and extracts package IDs from the results.
     """
-    url = f"https://play.google.com/store/search?q={package_name}&c=apps"
+    url = f"https://play.google.com/store/search?q={query}&c=apps&gl={region}"
     
-    # ⚠️ CRITICAL: You must use a 'User-Agent' header.
-    # Without it, Google blocks the request as a bot (Error 403/429).
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
     
     try:
-
         response = requests.get(url, headers=headers, timeout=10)         
-        pattern = r"https://play\.google\.com/store/apps/details\?id=([a-zA-Z0-9._]+)"
-        # 3. Extract all matches
-        package_names = re.findall(pattern, response.text)
+        # Improved regex to catch both absolute and relative links
+        pattern = r"(?:/store/apps/details\?id=|https://play\.google\.com/store/apps/details\?id=)([a-zA-Z0-9._]+)"
         
-        # 4. Print results
-        for pkg in package_names:
-            print(f"Found Package Name: {pkg}")
+        # Extract and deduplicate while preserving order of appearance
+        matches = re.findall(pattern, response.text)
+        package_names = []
+        seen = set()
+        for pkg in matches:
+            if pkg not in seen:
+                package_names.append(pkg)
+                seen.add(pkg)
+                print(f"Found Package Name: {pkg}")
+        
         return package_names
             
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error searching for {query}: {e}")
         return []
 
 
@@ -205,7 +282,7 @@ def list_supported_models(client):
         print(f"Error listing models: {e}")
         return []
 
-def get_app_details(package_id):
+def get_app_details(package_id, region="US"):
     """
     Fetches app details from Google Play Store using google_play_scraper.
     """
@@ -214,14 +291,14 @@ def get_app_details(package_id):
         details = play_app(
             package_id,
             lang='en', # defaults to 'en'
-            country='us' # defaults to 'us'
+            country=region.lower() if region else 'us'
         )
         return details
     except Exception as e:
         print(f"Error fetching app details for {package_id}: {e}")
         return None
 
-def process_results(raw_apps, region, resolve_with_ai, client, model_name):
+def process_results(raw_apps, region, resolve_with_ai, client, model_name, category=""):
     """
     Main orchestration logic.
     """
@@ -234,29 +311,43 @@ def process_results(raw_apps, region, resolve_with_ai, client, model_name):
         
         # 1. Verify the AI's initial guess
         print(f"🔍 Checking: {name} - {pkg}...")
-        if not verify_package_exists(pkg):
+        working_region = verify_package_exists(pkg, region=region)
+        if not working_region:
             print(f"❌ Initial package {pkg} failed. Searching...")            
-            pkgs = get_package_by_name(app['name'])
+            search_query = f"{name} ({category})" if category else name
+            pkgs = get_package_by_name(search_query, region=region)
             if len(pkgs)>0:
                 print(f"✅ Found via web search: {pkgs[0]}")
                 pkg = pkgs[0]
+                working_region = verify_package_exists(pkg, region=region) # Check again with working search result
+                status = "Verified" if working_region else "Not Found"
             elif resolve_with_ai:
                 ai_pkg = find_id_via_gemini(client, [name], model_name)
-                if ai_pkg and verify_package_exists(ai_pkg):
+                working_region = verify_package_exists(ai_pkg, region=region) if ai_pkg else None
+                if working_region:
                     print(f"✅ Found via AI: {ai_pkg}")
                     pkg = ai_pkg
+                    status = "Verified"
                 else:
                     print(f"❌ Not Found via AI: {name}")
                     status = "Not Found"
             else:
                 status = "Not Found"
+        else:
+            status = "Verified"
+        
+        # Use fallback region if primary failed
+        effective_region = working_region if working_region else region
         
         app['package'] = pkg
         app['status'] = status
+        app['region'] = effective_region # Store the working region
+        
         if status == "Verified":
-            app['play_store_url'] = f"https://play.google.com/store/apps/details?id={pkg}"
+            app['play_store_url'] = f"https://play.google.com/store/apps/details?id={pkg}&gl={effective_region}"
         else:
-            app['play_store_url'] = f"https://play.google.com/store/search?q={name}&c=apps"
+            search_query = f"{name} ({category})" if category else name
+            app['play_store_url'] = f"https://play.google.com/store/search?q={search_query}&c=apps&gl={region}"
         processed_list.append(app)
         
     return processed_list

@@ -62,6 +62,8 @@
         .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
         .btn-secondary { background: #64748b; color: white; }
         .btn-secondary:hover { background: #475569; }
+        .btn-danger { background: var(--error); color: white; }
+        .btn-danger:hover { background: #dc2626; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         .main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 2rem; animation: fadeIn 0.4s ease-out; }
@@ -424,7 +426,8 @@
         let importedResults = [];
         let lastViewedApp = null;
         let lastJsonBackup = null; // Store previous state for revert
-        let lastUpdateSummary = null; // Store summary of last applied changes
+        let searchAbortController = null;
+        let isSearching = false;
 
         function showToast(message, type = 'info', title = '') {
             const container = document.getElementById('toast-container');
@@ -462,20 +465,22 @@
                 source: 'research'
             };
             researchResults.push(newApp);
+            const newIndex = researchResults.length - 1; // Research apps are always at the start of currentResults
+            
             currentResults = [...researchResults, ...importedResults];
             
             document.getElementById('mainLayout').style.display = 'grid';
             
             renderTable(currentResults);
 
-            // Scroll to the new row
+            // Scroll to the new row using its specific ID
             setTimeout(() => {
-                const tableBody = document.getElementById('resultsBody');
-                if (tableBody && tableBody.lastElementChild) {
-                    tableBody.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const newRow = document.getElementById(`row-${newIndex}`);
+                if (newRow) {
+                    newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     // Highlight the input for quick editing
-                    const inputs = tableBody.lastElementChild.querySelectorAll('input');
-                    if (inputs.length > 0) inputs[0].focus();
+                    const input = newRow.querySelector('input');
+                    if (input) input.focus();
                 }
             }, 100);
         }
@@ -530,7 +535,15 @@
         }
 
         async function performSearch() {
-            const topic = document.getElementById('topic').value;
+            if (isSearching) {
+                if (searchAbortController) {
+                    searchAbortController.abort();
+                    showToast("Research cancelled", 'info');
+                }
+                return;
+            }
+
+            const topic = document.getElementById('topic').value.trim();
             const region = document.getElementById('region').value;
             const resolveWithAi = document.getElementById('aiResolve').checked;
             const apiKey = document.getElementById('apiKey').value;
@@ -540,21 +553,26 @@
             if(!apiKey) return showToast("Please enter your Gemini API Key", 'error', 'Missing Key');
 
             localStorage.setItem('geminiApiKey', apiKey);
-
-            localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelName);
 
             const currentCategory = document.getElementById('importCategorySelect')?.value;
 
+            // Start Search State
+            isSearching = true;
+            searchAbortController = new AbortController();
+            
             document.getElementById('loading').style.display = 'block';
             document.getElementById('mainLayout').style.display = 'none';
-            document.getElementById('searchBtn').disabled = true;
-            document.getElementById('searchBtn').innerText = "Searching...";
+            
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.innerText = "Cancel Research";
+            searchBtn.classList.add('btn-danger'); // Optional: change color to show it's a destructive action
 
             try {
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    signal: searchAbortController.signal,
                     body: JSON.stringify({ 
                         topic: topic, 
                         region: region, 
@@ -567,6 +585,12 @@
                 if (!response.ok) throw new Error("Server error");
                 
                 const data = await response.json();
+                
+                // Update the region input with the translated code from server if available
+                if (data.region) {
+                    document.getElementById('region').value = data.region;
+                }
+
                 researchResults = data.data.map(app => {
                     const isDuplicate = app.package && importedResults.some(local => local.package === app.package);
                     return {
@@ -581,11 +605,19 @@
                 renderTable(currentResults);
                 showToast(`Found ${researchResults.length} apps for "${topic}"`, 'success', 'Research Complete');
             } catch (error) {
-                showToast("Error: " + error.message, 'error', 'Search Failed');
+                if (error.name === 'AbortError') {
+                    console.log('Search aborted');
+                } else {
+                    showToast("Error: " + error.message, 'error', 'Search Failed');
+                }
             } finally {
+                isSearching = false;
+                searchAbortController = null;
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('searchBtn').disabled = false;
-                document.getElementById('searchBtn').innerText = "Start Research";
+                
+                const searchBtn = document.getElementById('searchBtn');
+                searchBtn.innerText = "Start Research";
+                searchBtn.classList.remove('btn-danger');
                 
                 // Restore imported JSON after search
                 restoreLastImportedJson(currentCategory);
@@ -601,9 +633,27 @@
             // Map apps to include their original index to maintain correspondence when filtered
             const appsWithIndex = apps.map((app, i) => ({...app, originalIndex: i}));
             
+            // Sort: Issues first, then Verified. 
+            // We define an issue as anything that is NOT 'Verified'.
+            const sortedApps = [...appsWithIndex].sort((a, b) => {
+                // Priority 1: Research results always above imported results
+                if (a.source === 'research' && b.source !== 'research') return -1;
+                if (a.source !== 'research' && b.source === 'research') return 1;
+
+                // Priority 2: Within same source, show non-verified (issues) first
+                const aIsVerified = a.status === 'Verified';
+                const bIsVerified = b.status === 'Verified';
+                
+                if (!aIsVerified && bIsVerified) return -1;
+                if (aIsVerified && !bIsVerified) return 1;
+                
+                // Priority 3: Maintain original order
+                return a.originalIndex - b.originalIndex;
+            });
+
             const filteredApps = filterIssues 
-                ? appsWithIndex.filter(app => app.status === 'Duplicate' || app.status === 'Not Found' || app.status === 'Error' || app.status === 'Checking' || !app.package)
-                : appsWithIndex;
+                ? sortedApps.filter(app => app.status === 'Duplicate' || app.status === 'Not Found' || app.status === 'Error' || app.status === 'Checking' || !app.package)
+                : sortedApps;
             
             if (filteredApps.length === 0) {
                 const message = filterIssues ? "No issue-flagged apps found" : "No Apps Found";
@@ -622,28 +672,39 @@
                 return;
             }
 
-            let hasImportedBanner = false;
-            
+            let lastSource = null;
             filteredApps.forEach((app) => {
                 const index = app.originalIndex;
                 const isChecked = app.checked;
-                // Add separator before imported apps
-                if (app.source === 'imported' && !hasImportedBanner) {
-                    const separator = document.createElement('tr');
-                    separator.innerHTML = `
-                        <td colspan="5" style="background: #f8fafc; text-align: center; color: #475569; padding: 16px; font-weight: 700; font-size: 0.85rem; border-top: 2px dashed #e2e8f0; border-bottom: 2px dashed #e2e8f0;">
-                            📂 APPS LOADED FROM JSON DATA
-                        </td>`;
-                    tbody.appendChild(separator);
-                    hasImportedBanner = true;
-                }
 
+                // Add section headers
+                if (app.source !== lastSource) {
+                    const headerTr = document.createElement('tr');
+                    const label = app.source === 'research' ? 'Research Discoveries' : 'Local Dataset (Imported)';
+                    const icon = app.source === 'research' ? '🔭' : '📁';
+                    const bgColor = app.source === 'research' ? '#f8fafc' : '#f1f5f9';
+                    
+                    headerTr.innerHTML = `
+                        <td colspan="5" style="background: ${bgColor}; padding: 10px 16px; font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--border); border-top: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.1rem;">${icon}</span>
+                                ${label}
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(headerTr);
+                    lastSource = app.source;
+                }
+                
                 const tr = document.createElement('tr');
                 tr.id = `row-${index}`;
                 
                 // Visual distinction for imported apps
                 if (app.source === 'imported') {
-                    tr.style.backgroundColor = 'rgba(241, 245, 249, 0.5)';
+                    tr.style.backgroundColor = 'rgba(241, 245, 249, 0.4)';
+                    tr.style.borderLeft = '4px solid #94a3b8';
+                } else {
+                    tr.style.borderLeft = '4px solid var(--primary)';
                 }
 
                 const isVerified = app.status === 'Verified';
@@ -657,10 +718,10 @@
                 if (isVerified || isDuplicate) {
                     linkElement = `<a id="link-${index}" href="#" onclick="showAppPreview(currentResults[${index}].package, ${index}); return false;">${linkLabel}</a>`;
                 } else {
-                    let directUrl = app.play_store_url;
-                    if (!directUrl || directUrl === '#') {
-                        directUrl = `https://play.google.com/store/search?q=${encodeURIComponent(app.name)}&c=apps`;
-                    }
+                    const category = document.getElementById('groupKey')?.value || "";
+                    const region = app.region || document.getElementById('region')?.value || "US";
+                    const searchQuery = category ? `${app.name} (${category})` : app.name;
+                    const directUrl = `https://play.google.com/store/search?q=${encodeURIComponent(searchQuery)}&c=apps&gl=${region}`;
                     linkElement = `<a id="link-${index}" href="${directUrl}" target="_blank">${linkLabel}</a>`;
                 }
 
@@ -670,20 +731,24 @@
                     ${aiResolveBtn}
                 </div>`;
 
+                const sourceBadge = app.source === 'imported' 
+                    ? '<span style="font-size: 9px; padding: 2px 6px; background: #64748b; color: white; border-radius: 100px; font-weight: 800; letter-spacing: 0.02em;">LOCAL</span>'
+                    : '<span style="font-size: 9px; padding: 2px 6px; background: var(--primary); color: white; border-radius: 100px; font-weight: 800; letter-spacing: 0.02em;">NEW</span>';
+
                 tr.innerHTML = `
                     <td style="text-align:center;">
                         <input type="checkbox" class="app-checkbox" data-index="${index}" ${checkedAttr} onchange="toggleAppSelection(${index}, this.checked)">
                     </td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <div style="display: flex; align-items: center; gap: 4px;">
-                                ${app.source === 'imported' ? '<span style="font-size: 10px; padding: 2px 4px; background: #94a3b8; color: white; border-radius: 4px; font-weight: 700;">LOCAL</span>' : ''}
-                                <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600; flex: 1;" onchange="updateName(${index}, this.value)">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                ${sourceBadge}
+                                <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600; flex: 1; background: transparent;" onchange="updateName(${index}, this.value)">
                             </div>
-                            <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; color: ${(isVerified || isDuplicate) ? 'var(--text-muted)' : 'var(--error)'};" onchange="updatePackage(${index}, this.value)">
+                            <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; background: transparent; color: ${app.isFixed ? 'var(--success)' : ((isVerified || isDuplicate) ? 'var(--text-muted)' : 'var(--error)')}; font-weight: ${app.isFixed ? '700' : '400'};" onchange="updatePackage(${index}, this.value)">
                         </div>
                     </td>
-                    <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center;" onchange="updateWeight(${index}, this.value)"></td>
+                    <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center; background: transparent;" onchange="updateWeight(${index}, this.value)"></td>
                     <td><span id="status-${index}" class="status-badge ${statusClass}">${app.status}</span></td>
                     <td>${linkHtml}</td>
                 `;
@@ -791,6 +856,9 @@
             lastViewedApp = { packageId, index };
 
             if (!packageId) {
+                const category = document.getElementById('groupKey')?.value || "";
+                const region = document.getElementById('region')?.value || "US";
+                const searchQuery = category ? `${appName} (${category})` : appName;
                 content.innerHTML = `
                     <div style="text-align: center; margin-top: 50px;">
                         <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
@@ -798,7 +866,7 @@
                         <p style="color: var(--text-muted); font-size: 0.9rem;">No package ID provided yet.</p>
                         <hr style="margin: 24px 0; border: 0; border-top: 1px solid var(--border);">
                         <p style="font-weight: 600;">Search for "${appName}" manually:</p>
-                        <a href="https://play.google.com/store/search?q=${encodeURIComponent(appName)}&c=apps" target="_blank" class="btn btn-secondary" style="margin-top: 16px; text-decoration: none;">Search Play Store</a>
+                        <a href="https://play.google.com/store/search?q=${encodeURIComponent(searchQuery)}&c=apps&gl=${region}" target="_blank" class="btn btn-secondary" style="margin-top: 16px; text-decoration: none;">Search Play Store</a>
                     </div>
                 `;
                 return;
@@ -811,8 +879,10 @@
                 </div>
             `;
 
+            const effectiveRegion = currentResults[index]?.region || document.getElementById('region').value || "US";
+            
             try {
-                const response = await fetch(`/api/app-details?package_id=${packageId}`);
+                const response = await fetch(`/api/app-details?package_id=${packageId}&region=${effectiveRegion}`);
                 if (!response.ok) throw new Error("App not found");
                 const app = await response.json();
 
@@ -838,19 +908,21 @@
                             ${app.descriptionHTML || app.description || 'No description available.'}
                         </div>
 
-                        <a href="https://play.google.com/store/apps/details?id=${packageId}" target="_blank" class="btn btn-primary" style="margin-top: 24px; text-decoration: none;">View on Play Store ↗</a>
+                        <a href="https://play.google.com/store/apps/details?id=${packageId}&gl=${effectiveRegion}" target="_blank" class="btn btn-primary" style="margin-top: 24px; text-decoration: none;">View on Play Store (region: ${effectiveRegion}) ↗</a>
                     </div>
                 `;
             } catch (e) {
                 const appName = currentResults[index] ? currentResults[index].name : "this app";
+                const category = document.getElementById('groupKey')?.value || "";
+                const searchQuery = category ? `${appName} (${category})` : appName;
                 content.innerHTML = `
                     <div style="text-align: center; margin-top: 50px;">
                         <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
                         <h3 style="color: var(--error);">Preview Unavailable</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem;">The package ID <code>${packageId}</code> could not be verified.</p>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">The package ID <code>${packageId}</code> could not be verified in region <code>${effectiveRegion}</code>.</p>
                         <hr style="margin: 24px 0; border: 0; border-top: 1px solid var(--border);">
                         <p style="font-weight: 600;">Search for "${appName}" manualy:</p>
-                        <a href="https://play.google.com/store/search?q=${encodeURIComponent(appName)}&c=apps" target="_blank" class="btn btn-secondary" style="margin-top: 16px; text-decoration: none;">Search Play Store</a>
+                        <a href="https://play.google.com/store/search?q=${encodeURIComponent(searchQuery)}&c=apps&gl=${effectiveRegion}" target="_blank" class="btn btn-secondary" style="margin-top: 16px; text-decoration: none;">Search Play Store</a>
                     </div>
                 `;
             }
@@ -882,7 +954,8 @@
                 }
 
                 try {
-                    const response = await fetch(`/api/find-package?app_name=${encodeURIComponent(newValue)}`);
+                    const region = document.getElementById('region').value || "US";
+                    const response = await fetch(`/api/find-package?app_name=${encodeURIComponent(newValue)}&region=${region}`);
                     const data = await response.json();
                     
                     if (data.package_id) {
@@ -900,7 +973,12 @@
                         currentResults[index].status = "Not Found";
                         const linkElement = document.getElementById(`link-${index}`);
                         if (linkElement) {
+                            const category = document.getElementById('groupKey')?.value || "";
+                            const workingRegion = data.region || region;
+                            const searchQuery = category ? `${newValue} (${category})` : newValue;
                             linkElement.innerText = "Search Store ↗";
+                            linkElement.href = `https://play.google.com/store/search?q=${encodeURIComponent(searchQuery)}&c=apps&gl=${workingRegion}`;
+                            linkElement.target = "_blank";
                         }
                         showToast("Could not automatically find package ID", 'info');
                     }
@@ -922,6 +1000,7 @@
         async function updatePackage(index, newValue, shouldShowPreview = true) {
             if (!currentResults[index]) return;
             currentResults[index].package = newValue;
+            currentResults[index].isFixed = false; // Reset flag on update
             
             const statusCell = document.getElementById(`status-${index}`);
             const linkElement = document.getElementById(`link-${index}`);
@@ -934,11 +1013,23 @@
 
             try {
                 const appName = currentResults[index].name;
-                const response = await fetch(`/api/verify?package_name=${newValue}&app_name=${encodeURIComponent(appName)}`);
+                const region = document.getElementById('region').value || "US";
+                const response = await fetch(`/api/verify?package_name=${newValue}&app_name=${encodeURIComponent(appName)}&region=${region}`);
                 const data = await response.json();
                 
                 currentResults[index].status = data.status;
                 currentResults[index].play_store_url = data.play_store_url;
+                currentResults[index].region = data.region;
+
+                // Update package if server found a better one (fallback logic)
+                const isFixedByServer = data.package && data.package !== newValue;
+                if (isFixedByServer) {
+                    currentResults[index].package = data.package;
+                    currentResults[index].isFixed = true;
+                    if (pkgInput) {
+                        pkgInput.value = data.package;
+                    }
+                }
 
                 // --- DUPLICATE CHECK ---
                 // 1. If updating a research app: mark as Duplicate if it exists in the local list
@@ -982,7 +1073,13 @@
                 }
                 
                 if (pkgInput) {
-                    pkgInput.style.color = isOk ? 'var(--text-muted)' : 'var(--error)';
+                    if (currentResults[index].isFixed) {
+                        pkgInput.style.color = 'var(--success)';
+                        pkgInput.style.fontWeight = '700';
+                    } else {
+                        pkgInput.style.color = isOk ? 'var(--text-muted)' : 'var(--error)';
+                        pkgInput.style.fontWeight = '400';
+                    }
                 }
                 
                 if (linkElement) {
@@ -995,8 +1092,13 @@
                             showAppPreview(currentResults[index].package, index);
                         };
                     } else {
+                        const workingRegion = currentResults[index].region || document.getElementById('region').value || "US";
+                        const category = document.getElementById('groupKey')?.value || "";
+                        const appName = currentResults[index].name;
+                        const searchQuery = category ? `${appName} (${category})` : appName;
+                        
                         linkElement.innerText = 'Search Store ↗';
-                        linkElement.href = `https://play.google.com/store/search?q=${encodeURIComponent(currentResults[index].name)}&c=apps`;
+                        linkElement.href = `https://play.google.com/store/search?q=${encodeURIComponent(searchQuery)}&c=apps&gl=${workingRegion}`;
                         linkElement.target = "_blank";
                         linkElement.onclick = null;
                     }

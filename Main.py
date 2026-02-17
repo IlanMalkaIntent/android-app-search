@@ -46,12 +46,16 @@ def search_apps(request: SearchRequest):
     try:
         # Initialize Client dynamically
         client = genai.Client(api_key=request.api_key)
-        print(f" Starting search for topic: {request.topic} in region: {request.region} using model: {request.model_name}")
+        
+        # Translate country name to code
+        region_code = scraper_logic.translate_country_to_code(request.region)
+        
+        print(f" Starting search for topic: {request.topic} in region: {region_code} (input: {request.region}) using model: {request.model_name}")
         
         # 1. Get initial list
         raw_results = scraper_logic.get_market_research(
             request.topic, 
-            request.region, 
+            region_code, 
             client, 
             request.model_name
         )
@@ -59,13 +63,14 @@ def search_apps(request: SearchRequest):
         # 2. Process and verify
         final_results = scraper_logic.process_results(
             raw_results, 
-            request.region, 
+            region_code, 
             request.resolve_pkg_with_ai, 
             client,
-            request.model_name
+            request.model_name,
+            category=request.topic
         )
         
-        return {"data": final_results}
+        return {"data": final_results, "region": region_code}
     except Exception as e:
         # For debugging purposes
         print(f"Server Error: {e}")
@@ -81,33 +86,58 @@ def get_models(api_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/verify")
-def verify_package(package_name: str, app_name: str = ""):
-    exists = scraper_logic.verify_package_exists(package_name)
-    if exists:
+def verify_package(package_name: str, app_name: str = "", region: str = "US"):
+    region_code = scraper_logic.translate_country_to_code(region)
+    working_region = scraper_logic.verify_package_exists(package_name, region=region_code)
+    
+    if working_region:
         return {
             "status": "Verified",
-            "play_store_url": f"https://play.google.com/store/apps/details?id={package_name}"
+            "package": package_name,
+            "region": working_region,
+            "play_store_url": f"https://play.google.com/store/apps/details?id={package_name}&gl={working_region}"
         }
-    else:
-        return {
-            "status": "Not Found",
-            "play_store_url": f"https://play.google.com/store/search?q={app_name}&c=apps"
-        }
+    
+    # Re-use logic: if not found, try searching by name
+    if app_name:
+        print(f"❌ Verification for {package_name} (region: {region_code}) failed. Attempting search for {app_name}...")
+        results = scraper_logic.get_package_by_name(app_name, region=region_code)
+        if results:
+            new_package = results[0]
+            # Try verification with fallbacks for the new package too
+            working_region = scraper_logic.verify_package_exists(new_package, region=region_code)
+            if working_region:
+                print(f"✅ Found alternative via web search: {new_package} (in region: {working_region})")
+                return {
+                    "status": "Verified",
+                    "package": new_package,
+                    "region": working_region,
+                    "play_store_url": f"https://play.google.com/store/apps/details?id={new_package}&gl={working_region}"
+                }
+    
+    return {
+        "status": "Not Found",
+        "package": package_name,
+        "region": region_code,
+        "play_store_url": f"https://play.google.com/store/search?q={app_name}&c=apps&gl={region_code}" if app_name else "#"
+    }
 
 @app.get("/api/find-package")
-def find_package(app_name: str):
+def find_package(app_name: str, region: str = "US"):
     """
     Attempts to find a package ID for a given app name.
     Returns the first matching package ID or None.
     """
-    packages = scraper_logic.get_package_by_name(app_name)
+    region_code = scraper_logic.translate_country_to_code(region)
+    packages = scraper_logic.get_package_by_name(app_name, region=region_code)
     if packages:
         return {"package_id": packages[0]}
     return {"package_id": None}
 
 @app.get("/api/app-details")
-def app_details(package_id: str):
-    details = scraper_logic.get_app_details(package_id)
+def app_details(package_id: str, region: str = "US"):
+    region_code = scraper_logic.translate_country_to_code(region)
+    details = scraper_logic.get_app_details(package_id, region=region_code)
     if not details:
         raise HTTPException(status_code=404, detail="App not found")
     return details
