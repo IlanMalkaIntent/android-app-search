@@ -788,7 +788,7 @@
                                 ${sourceBadge}
                                 <input type="text" value="${app.name}" class="edit-input" style="font-weight: 600; flex: 1; background: transparent;" onchange="updateName(${index}, this.value)">
                             </div>
-                            <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; background: transparent; color: ${app.isFixed ? 'var(--success)' : ((isVerified || isDuplicate) ? 'var(--text-muted)' : 'var(--error)')}; font-weight: ${app.isFixed ? '700' : '400'};" onchange="updatePackage(${index}, this.value)">
+                            <input id="pkg-input-${index}" type="text" value="${app.package}" class="edit-input" style="font-size: 0.8rem; background: transparent; color: ${app.isFixed ? 'var(--success)' : ((isVerified || isDuplicate) ? 'var(--text-muted)' : 'var(--error)')}; font-weight: ${app.isFixed ? '700' : '400'};" onchange="updatePackage(${index}, this.value, true, true)">
                         </div>
                     </td>
                     <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center; background: transparent;" onchange="updateWeight(${index}, this.value)"></td>
@@ -1099,7 +1099,7 @@
             refreshJsonIfActive();
         }
 
-        async function updatePackage(index, newValue, shouldShowPreview = true) {
+        async function updatePackage(index, newValue, shouldShowPreview = true, isManual = false) {
             if (!currentResults[index]) return;
             currentResults[index].package = newValue;
             currentResults[index].isFixed = false; // Reset flag on update
@@ -1118,8 +1118,8 @@
                 const appName = app.name;
                 const region = document.getElementById('region').value || "US";
                 
-                // Only skip search for imported results, allow for research/new results
-                const skipSearch = app.source === 'imported';
+                // Skip fallback search if it's an imported app OR a manual edit
+                const skipSearch = isManual || (app.source === 'imported');
                 
                 const response = await fetch(`/api/verify?package_name=${newValue}&app_name=${encodeURIComponent(appName)}&region=${region}&skip_search=${skipSearch}`);
                 const data = await response.json();
@@ -1209,6 +1209,15 @@
                         linkElement.target = "_blank";
                         linkElement.onclick = null;
                     }
+                }
+
+                // If manual edit fails verification, uncheck the app
+                if (isManual && !isOk) {
+                    currentResults[index].checked = false;
+                    const row = document.getElementById(`row-${index}`);
+                    const checkbox = row ? row.querySelector('.app-checkbox') : null;
+                    if (checkbox) checkbox.checked = false;
+                    showToast(`Manual entry "${newValue}" not found. Unchecked.`, 'info');
                 }
 
                 if (isOk) {
