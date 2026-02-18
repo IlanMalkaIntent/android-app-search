@@ -315,7 +315,6 @@
 
             <div class="action-btns" id="exportSection">
                 <button onclick="updateLocalCopy()" class="btn btn-secondary" style="background: #10b981; border:none;" title="Save changes to current memory">💾 Update Local</button>
-                <button id="revertBtn" onclick="revertLocalCopy()" class="btn btn-secondary" style="background: #64748b; border:none; display:none;" title="Restore state before last update">↩️ Revert</button>
                 <button onclick="exportJson()" class="btn btn-primary" title="Export final JSON file">⬇️ Download JSON</button>
                 <button onclick="clearLocalJson()" class="btn btn-secondary" style="background: #ef4444; border:none;" title="Clear memory">🗑️ Clear</button>
             </div>
@@ -432,8 +431,6 @@
         let searchAbortController = null;
         let isSearching = false;
         let lastViewedApp = null;
-        let lastJsonBackup = null; // Store previous state for revert
-        let lastUpdateSummary = null; // Store summary of last applied changes
 
         const safeParseWeight = (val) => {
             const p = parseFloat(val);
@@ -1666,13 +1663,6 @@
                     throw new Error("Category not found in dataset.");
                 }
 
-                // Backup for potential revert (optional, but good practice)
-                lastJsonBackup = {
-                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
-                    research: JSON.parse(JSON.stringify(researchResults))
-                };
-                document.getElementById('revertBtn').style.display = 'inline-block';
-
                 // Save to localStorage
                 localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
                 
@@ -1777,17 +1767,6 @@
                 const message = `Do you want to apply these changes to the local dataset?\n\n` + changeLog.join('\n');
                 if (message && !confirm(message)) return;
 
-                // --- BACKUP BEFORE APPLYING (moved from before confirm) ---
-                lastJsonBackup = {
-                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
-                    research: JSON.parse(JSON.stringify(researchResults))
-                };
-                lastUpdateSummary = {
-                    category: groupKey,
-                    changes: changeLog
-                };
-                document.getElementById('revertBtn').style.display = 'inline-block';
-
                 // --- APPLY CHANGES ---
                 if (isNewCategory) {
                     targetCategory = {
@@ -1869,13 +1848,6 @@
                 localStorage.removeItem('lastImportedJson');
                 localStorage.removeItem('lastImportedFileName');
                 
-                // Backup before clear
-                lastJsonBackup = {
-                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
-                    research: JSON.parse(JSON.stringify(researchResults))
-                };
-                document.getElementById('revertBtn').style.display = 'inline-block';
-                
                 // Clear in-memory data
                 importedJsonData = null;
                 importedFileName = null;
@@ -1928,51 +1900,7 @@
             }
         }
 
-        function revertLocalCopy() {
-            if (!lastJsonBackup) return showToast("No backup available to revert.", "error");
-            
-            if (!confirm("Revert to the state before the last update? All changes made in the last 'Update Local' session will be lost.")) {
-                return;
-            }
 
-            try {
-                // Restore from enhanced backup structure
-                importedJsonData = lastJsonBackup.importedJson;
-                researchResults = lastJsonBackup.research;
-                
-                const restoredSummary = lastUpdateSummary;
-                lastJsonBackup = null; // Consume backup
-                lastUpdateSummary = null;
-                document.getElementById('revertBtn').style.display = 'none';
-
-                // Save to localStorage
-                localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
-                
-                // Refresh categories and current view
-                const categoryToRestore = restoredSummary ? restoredSummary.category : document.getElementById('importCategorySelect').value;
-                
-                updateCategoryDropdown();
-                
-                // If a category was selected, restore its view. 
-                // This will re-merge the restored researchResults and importedResults
-                if (categoryToRestore) {
-                    const select = document.getElementById('importCategorySelect');
-                    if (select) {
-                        select.value = categoryToRestore;
-                        onCategorySelect();
-                    }
-                } else {
-                    currentResults = [...researchResults, ...importedResults];
-                    renderTable(currentResults);
-                }
-
-                let infoMsg = restoredSummary ? `Restored "${restoredSummary.category}":\n` + restoredSummary.changes.join('\n') : "Reverted to previous state";
-                showToast(infoMsg, "success", "Undo Successful");
-            } catch (e) {
-                console.error(e);
-                showToast("Revert Failed: " + e.message, "error");
-            }
-        }
 
         // --- JSON Tree Renderer ---
         function renderJsonTree(data, container) {
