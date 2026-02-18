@@ -308,6 +308,7 @@
                     <select id="importCategorySelect" onchange="onCategorySelect()" class="edit-input" style="height: 38px; flex: 1; min-width: 200px; background: #fff; border: 1px solid var(--border); border-radius: 8px;">
                         <option value="">-- Choose Existing Category --</option>
                     </select>
+                    <button id="removeCategoryBtn" onclick="removeCategory()" class="btn btn-secondary" style="background: #ef4444; border:none; padding: 0 12px; height: 38px; font-size: 0.8rem;" title="Remove this category from the dataset">❌ Remove</button>
                 </div>
             </div>
             <div id="noLoaderMsg" style="color: var(--text-muted); font-size: 0.85rem; font-style: italic;">No dataset loaded.</div>
@@ -366,24 +367,10 @@
 
     <div id="toast-container"></div>
 
-    <div class="main-layout" id="mainLayout" style="display:none;">
+    <div class="main-layout" id="mainLayout">
         <div class="table-area">
-            <div class="table-container">
-                <table id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th style="width: 60px; text-align: center;">Pick</th>
-                            <th>App Identity</th>
-                            <th style="width: 100px;">Weight</th>
-                            <th style="width: 120px;">Verification</th>
-                            <th style="width: 100px;">Explore</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsBody"></tbody>
-                </table>
-            </div>
-
-            <div style="margin-top: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+            <!-- Table Controls at the Top -->
+            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
                 <button onclick="addNewRow()" class="btn btn-secondary">➕ Add Custom App</button>
                 <div style="display: flex; align-items: center; gap: 8px; background: #fff; padding: 6px 14px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                     <label for="filterIssues" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em;">Show Issues Only</label>
@@ -396,6 +383,24 @@
                     </label>
                 </div>
             </div>
+
+            <div class="table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;">Pick</th>
+                            <th>App Identity</th>
+                            <th style="width: 100px;">Weight</th>
+                            <th style="width: 120px;">Verification</th>
+                            <th style="width: 100px;">Explore</th>
+                            <th style="width: 50px; text-align: center;">Rev</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Table Controls Moved to Top -->
 
             <!-- Export Configuration is now in the header -->
 
@@ -424,10 +429,16 @@
         let currentResults = [];
         let researchResults = [];
         let importedResults = [];
-        let lastViewedApp = null;
-        let lastJsonBackup = null; // Store previous state for revert
         let searchAbortController = null;
         let isSearching = false;
+        let lastViewedApp = null;
+        let lastJsonBackup = null; // Store previous state for revert
+        let lastUpdateSummary = null; // Store summary of last applied changes
+
+        const safeParseWeight = (val) => {
+            const p = parseFloat(val);
+            return isNaN(p) ? 1.0 : p;
+        };
 
         function showToast(message, type = 'info', title = '') {
             const container = document.getElementById('toast-container');
@@ -454,6 +465,35 @@
             }, 3500);
         }
 
+        function removeApp(index) {
+            const app = currentResults[index];
+            if (!app) return;
+
+            const name = app.name || "this app";
+            if (!confirm(`Remove "${name}" from the list?`)) return;
+
+            // Identify which source list to remove from
+            if (app.source === 'research') {
+                // Find index in researchResults
+                // Since currentResults = [...researchResults, ...importedResults], 
+                // research indices are 0 to researchResults.length - 1
+                researchResults.splice(index, 1);
+            } else {
+                // Find index in importedResults
+                const importedIndex = index - researchResults.length;
+                importedResults.splice(importedIndex, 1);
+            }
+
+            // Sync currentResults
+            currentResults = [...researchResults, ...importedResults];
+            
+            // Re-render
+            renderTable(currentResults);
+            showToast(`Removed "${name}"`, 'info');
+
+            refreshJsonIfActive();
+        }
+
         function addNewRow() {
             const newApp = {
                 name: "New App",
@@ -462,6 +502,7 @@
                 play_store_url: "#",
                 weight: 1.0,
                 isCustom: true,
+                checked: true, // Make it checked by default so it's included in exports/updates
                 source: 'research'
             };
             researchResults.push(newApp);
@@ -483,6 +524,11 @@
                     if (input) input.focus();
                 }
             }, 100);
+
+            // Refresh JSON view if it's currently active
+            if (document.getElementById('tab-json').classList.contains('active')) {
+                viewJson();
+            }
         }
 
         window.onload = () => {
@@ -751,6 +797,9 @@
                     <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center; background: transparent;" onchange="updateWeight(${index}, this.value)"></td>
                     <td><span id="status-${index}" class="status-badge ${statusClass}">${app.status}</span></td>
                     <td>${linkHtml}</td>
+                    <td style="text-align:center;">
+                        <button onclick="removeApp(${index})" class="btn" style="padding: 4px; background: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer;" title="Remove app from list">🗑️</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -844,6 +893,7 @@
                 aiLink.style.pointerEvents = "auto";
                 aiLink.style.opacity = "1";
             }
+            refreshJsonIfActive();
         }
 
         async function showAppPreview(packageId, index) {
@@ -991,10 +1041,12 @@
                     showToast("Discovery error: " + e.message, 'error');
                 }
             }
+            refreshJsonIfActive();
         }
 
         function updateWeight(index, newValue) {
             currentResults[index].weight = parseFloat(newValue) || 1.0;
+            refreshJsonIfActive();
         }
 
         async function updatePackage(index, newValue, shouldShowPreview = true) {
@@ -1158,6 +1210,7 @@
                     renderTable(currentResults);
                 }
             }
+            refreshJsonIfActive();
         }
 
         function toggleListName(checked) {
@@ -1173,8 +1226,11 @@
             const groupKey = document.getElementById('groupKey').value.trim();
             const msName = document.getElementById('exportMsName').value.trim();
 
-            if (!groupKey) throw new Error("Please enter a Category (JSON Key) before exporting.");
-            if (!msName) throw new Error("Please enter an MS Name before exporting.");
+            if (!groupKey) throw new Error("Please enter a Category Key.");
+            if (!msName) {
+                // Use groupKey as fallback for msName to avoid blocking local updates
+                document.getElementById('exportMsName').value = groupKey;
+            }
 
             const count = parseInt(document.getElementById('exportCount').value) || 0;
             const threshold = parseFloat(document.getElementById('exportThreshold').value) || 0.0;
@@ -1378,7 +1434,28 @@
 
         function onCategorySelect() {
             const catKey = document.getElementById('importCategorySelect').value;
-            if (!catKey || !importedJsonData) return;
+            
+            if (!catKey) {
+                // Clear inputs
+                document.getElementById('groupKey').value = '';
+                document.getElementById('exportCount').value = '1';
+                document.getElementById('exportThreshold').value = '1.0';
+                document.getElementById('exportMsName').value = '';
+                document.getElementById('exportListName').value = '';
+                const isListCheck = document.getElementById('exportIsList');
+                if (isListCheck) {
+                    isListCheck.checked = true;
+                    toggleListName(true);
+                }
+                
+                // Clear only imported results, keep research results
+                importedResults = [];
+                currentResults = [...researchResults, ...importedResults];
+                renderTable(currentResults);
+                return;
+            }
+
+            if (!importedJsonData) return;
 
             // --- DRILL DOWN ---
             const root = getImportRoot(importedJsonData);
@@ -1457,14 +1534,15 @@
                         uniqueImported.push({
                             name: app.name || "Unknown",
                             package: pkg,
-                            weight: app.weight || 1.0,
+                            weight: safeParseWeight(app.weight),
                             status: "Checking",
                             isDuplicate: false,
                             checked: app.status === 'Verified' || !app.status, // maintain selection if verified
                             play_store_url: `https://play.google.com/store/apps/details?id=${pkg}`,
                             source: 'imported',
                             originalName: app.name || "Unknown",
-                            originalPackage: pkg
+                            originalPackage: pkg,
+                            originalWeight: safeParseWeight(app.weight)
                         });
                     });
 
@@ -1507,6 +1585,13 @@
                         <p>Select an app from the list to view its market profile.</p>
                     </div>
                 `;
+            }
+        }
+
+        function refreshJsonIfActive() {
+            const jsonTab = document.getElementById('tab-json');
+            if (jsonTab && jsonTab.classList.contains('active')) {
+                viewJson();
             }
         }
 
@@ -1556,6 +1641,58 @@
             }
         }
 
+        function removeCategory() {
+            const select = document.getElementById('importCategorySelect');
+            const catKey = select.value;
+            
+            if (!catKey) {
+                return showToast("Please select a category to remove.", 'info');
+            }
+
+            if (!confirm(`Are you sure you want to remove the category "${catKey}"? This will delete all apps within this category from the local dataset.`)) {
+                return;
+            }
+
+            try {
+                const root = getImportRoot(importedJsonData);
+                if (!root) throw new Error("No dataset loaded.");
+
+                // Delete from the correct structure
+                if (root.AppList && root.AppList[catKey]) {
+                    delete root.AppList[catKey];
+                } else if (root[catKey]) {
+                    delete root[catKey];
+                } else {
+                    throw new Error("Category not found in dataset.");
+                }
+
+                // Backup for potential revert (optional, but good practice)
+                lastJsonBackup = JSON.parse(JSON.stringify(importedJsonData));
+                document.getElementById('revertBtn').style.display = 'inline-block';
+
+                // Save to localStorage
+                localStorage.setItem('lastImportedJson', JSON.stringify(importedJsonData));
+                
+                showToast(`Removed category: "${catKey}"`, 'success');
+
+                // Refresh UI
+                updateCategoryDropdown();
+                
+                // Reset fields and clear table since the category is gone
+                document.getElementById('importCategorySelect').value = '';
+                onCategorySelect(); 
+
+                // Update JSON preview if active
+                if (document.getElementById('tab-json').classList.contains('active')) {
+                    viewJson();
+                }
+
+            } catch (e) {
+                console.error(e);
+                showToast("Failed to remove category: " + e.message, 'error');
+            }
+        }
+
         function updateLocalCopy() {
             try {
                 const exportResult = generateExportData();
@@ -1563,10 +1700,10 @@
                 const currentCategoryData = exportResult[groupKey];
                 const newApps = currentCategoryData.list || [];
 
-                // Initialize importedJsonData if it doesn't exist
-                if (!importedJsonData) {
+                // Initialize importedJsonData if it doesn't exist or is empty
+                if (!importedJsonData || Object.keys(importedJsonData).length === 0) {
                     importedJsonData = { AppList: {} };
-                    importedFileName = "research_data.json";
+                    if (!importedFileName) importedFileName = "research_data.json";
                 }
 
                 // Ensure AppList structure exists in the effective root
@@ -1597,15 +1734,22 @@
                     // Check for app changes
                     let addedCount = 0;
                     let removedCount = 0;
-                    let editedCount = 0;
+                    let identityEditedCount = 0;
+                    let weightEditedCount = 0;
 
                     currentResults.forEach(app => {
                         if (app.source === 'imported') {
                             if (!app.checked) {
                                 removedCount++;
                             } else {
-                                const isEdited = (app.name !== app.originalName) || (app.package !== app.originalPackage);
-                                if (isEdited) editedCount++;
+                                const identityChanged = (app.name !== app.originalName) || (app.package !== app.originalPackage);
+                                // Use a small epsilon for float comparison to be safe
+                                const currentWeight = safeParseWeight(app.weight);
+                                const originalWeight = safeParseWeight(app.originalWeight);
+                                const weightChanged = Math.abs(currentWeight - originalWeight) > 0.0001;
+                                
+                                if (identityChanged) identityEditedCount++;
+                                if (weightChanged) weightEditedCount++;
                             }
                         } else if (app.source === 'research' && app.checked) {
                             addedCount++;
@@ -1614,9 +1758,10 @@
                     
                     if (addedCount > 0) changeLog.push(`➕ Adding ${addedCount} new apps.`);
                     if (removedCount > 0) changeLog.push(`➖ Removing ${removedCount} unselected apps.`);
-                    if (editedCount > 0) changeLog.push(`✏️ Updating ${editedCount} edited apps.`);
+                    if (identityEditedCount > 0) changeLog.push(`✏️ Identity updated for ${identityEditedCount} apps.`);
+                    if (weightEditedCount > 0) changeLog.push(`⚖️ Weight updated for ${weightEditedCount} apps.`);
                     
-                    if (addedCount === 0 && removedCount === 0 && editedCount === 0 && newApps.length > 0) {
+                    if (addedCount === 0 && removedCount === 0 && identityEditedCount === 0 && weightEditedCount === 0 && newApps.length > 0) {
                         changeLog.push(`✅ No changes to app list detected.`);
                     }
                 }
@@ -1650,6 +1795,7 @@
                         targetCategory.listName = currentCategoryData.listName;
                     }
                     root.AppList[groupKey] = targetCategory;
+                    console.log(`Created new category "${groupKey}" in AppList`);
                 }
 
                 // Update category parameters
@@ -1677,6 +1823,7 @@
                     checked: true,
                     originalName: app.name,
                     originalPackage: app.package,
+                    originalWeight: safeParseWeight(app.weight),
                     play_store_url: `https://play.google.com/store/apps/details?id=${app.package}`
                 }));
 
@@ -1693,6 +1840,11 @@
                 if (document.getElementById('tab-json').classList.contains('active')) {
                     viewJson();
                 }
+
+                // IMPORTANT: Refresh dropdown and maintain selection
+                updateCategoryDropdown();
+                const select = document.getElementById('importCategorySelect');
+                if (select) select.value = groupKey;
 
             } catch (e) {
                 console.error(e);
@@ -1737,6 +1889,11 @@
                 renderTable(currentResults);
                 
                 showToast('Local JSON data cleared successfully', 'success', 'Cleared');
+
+                // Refresh JSON view if it's currently active
+                if (document.getElementById('tab-json').classList.contains('active')) {
+                    viewJson();
+                }
             } catch (e) {
                 showToast('Failed to clear local JSON: ' + e.message, 'error', 'Clear Failed');
             }
@@ -1751,6 +1908,11 @@
             currentResults = [...researchResults, ...importedResults];
             renderTable(currentResults);
             showToast('Research results cleared', 'info');
+
+            // Refresh JSON view if it's currently active
+            if (document.getElementById('tab-json').classList.contains('active')) {
+                viewJson();
+            }
         }
 
         function revertLocalCopy() {
@@ -1912,6 +2074,23 @@
 
             return node;
         }
+
+        // Initialize UI State on Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check for previous session data
+            const apiKey = localStorage.getItem('geminiApiKey');
+            const modelName = localStorage.getItem('geminiModel');
+            if (apiKey) document.getElementById('apiKey').value = apiKey;
+            if (modelName) document.getElementById('modelName').value = modelName;
+
+            // Restore last active dataset if available
+            restoreLastImportedJson();
+            
+            // If no dataset was restored, ensure the table area is still shown with empty state
+            if (currentResults.length === 0) {
+                renderTable([]);
+            }
+        });
     </script>
     <style>
         @keyframes spin { 100% { transform: rotate(360deg); } }
