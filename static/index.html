@@ -792,7 +792,16 @@
                         </div>
                     </td>
                     <td><input type="number" step="0.1" value="${app.weight || 1.0}" class="edit-input" style="width: 70px; text-align: center; background: transparent;" onchange="updateWeight(${index}, this.value)"></td>
-                    <td><span id="status-${index}" class="status-badge ${statusClass}">${app.status}</span></td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span id="status-${index}" class="status-badge ${statusClass}">${app.status}</span>
+                            ${(!isVerified && !isDuplicate) ? `
+                                <button onclick="discoverPackage(${index})" class="btn-icon" title="Search for correct package ID" style="padding: 2px; background: none; border: none; cursor: pointer; font-size: 0.9rem; color: #64748b; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;" onmouseover="this.style.transform='rotate(90deg)'" onmouseout="this.style.transform='rotate(0deg)'">
+                                    🔄
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
                     <td>${linkHtml}</td>
                     <td style="text-align:center;">
                         <button onclick="removeApp(${index})" class="btn" style="padding: 4px; background: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer;" title="Remove app from list">🗑️</button>
@@ -1041,6 +1050,50 @@
             refreshJsonIfActive();
         }
 
+        async function discoverPackage(index) {
+            const app = currentResults[index];
+            if (!app) return;
+
+            const pkgInput = document.getElementById(`pkg-input-${index}`);
+            const statusCell = document.getElementById(`status-${index}`);
+            
+            if (statusCell) {
+                statusCell.innerText = "Searching...";
+                statusCell.className = "status-badge Pending";
+            }
+
+            try {
+                const region = document.getElementById('region').value || "US";
+                const response = await fetch(`/api/find-package?app_name=${encodeURIComponent(app.name)}&region=${region}`);
+                const data = await response.json();
+                
+                if (data.package_id) {
+                    if (pkgInput) {
+                        pkgInput.value = data.package_id;
+                    }
+                    // This will trigger verification and UI update
+                    // We call updatePackage with skip_search=false logic (implicitly handled there for research apps, 
+                    // but wait, we need to make sure updatePackage knows this discovery is allowed)
+                    await updatePackage(index, data.package_id);
+                    showToast(`Found and updated package for "${app.name}"`, 'success');
+                } else {
+                    if (statusCell) {
+                        statusCell.innerText = "Not Found";
+                        statusCell.className = "status-badge invalid";
+                    }
+                    showToast(`Could not find a package ID for "${app.name}"`, 'info');
+                }
+            } catch (e) {
+                console.error("Manual discovery error", e);
+                if (statusCell) {
+                    statusCell.innerText = "Error";
+                    statusCell.className = "status-badge Error";
+                }
+                showToast("Discovery error: " + e.message, 'error');
+            }
+            refreshJsonIfActive();
+        }
+
         function updateWeight(index, newValue) {
             currentResults[index].weight = parseFloat(newValue) || 1.0;
             refreshJsonIfActive();
@@ -1061,9 +1114,14 @@
             }
 
             try {
-                const appName = currentResults[index].name;
+                const app = currentResults[index];
+                const appName = app.name;
                 const region = document.getElementById('region').value || "US";
-                const response = await fetch(`/api/verify?package_name=${newValue}&app_name=${encodeURIComponent(appName)}&region=${region}`);
+                
+                // Only skip search for imported results, allow for research/new results
+                const skipSearch = app.source === 'imported';
+                
+                const response = await fetch(`/api/verify?package_name=${newValue}&app_name=${encodeURIComponent(appName)}&region=${region}&skip_search=${skipSearch}`);
                 const data = await response.json();
                 
                 currentResults[index].status = data.status;
@@ -1324,8 +1382,10 @@
                 localStorage.setItem('lastImportedJson', text);
                 localStorage.setItem('lastImportedFileName', file.name);
                 
-                // Display the filename
-                document.getElementById('importedFileName').innerText = `Loaded: ${file.name}`;
+                // Display the filename (limited to 60 chars)
+                const displayName = file.name.length > 60 ? file.name.substring(0, 57) + '...' : file.name;
+                document.getElementById('importedFileName').innerText = `Loaded: ${displayName}`;
+                document.getElementById('importedFileName').title = file.name; // Show full name on hover
                 
                 // Update dropdown
                 updateCategoryDropdown();
@@ -1355,8 +1415,10 @@
                     importedJsonData = JSON.parse(savedJson);
                     importedFileName = savedFileName;
                     
-                    // Display the filename
-                    document.getElementById('importedFileName').innerText = `Loaded: ${savedFileName}`;
+                    // Display the filename (limited to 60 chars)
+                    const displayName = savedFileName.length > 60 ? savedFileName.substring(0, 57) + '...' : savedFileName;
+                    document.getElementById('importedFileName').innerText = `Loaded: ${displayName}`;
+                    document.getElementById('importedFileName').title = savedFileName; // Show full name on hover
                     
                     // Update dropdown
                     updateCategoryDropdown();

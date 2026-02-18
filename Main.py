@@ -86,7 +86,7 @@ def get_models(api_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/verify")
-def verify_package(package_name: str, app_name: str = "", region: str = "US"):
+def verify_package(package_name: str, app_name: str = "", region: str = "US", skip_search: bool = False):
     region_code = scraper_logic.translate_country_to_code(region)
     working_region = scraper_logic.verify_package_exists(package_name, region=region_code)
     
@@ -99,7 +99,7 @@ def verify_package(package_name: str, app_name: str = "", region: str = "US"):
         }
     
     # Re-use logic: if not found, try searching by name
-    if app_name:
+    if app_name and not skip_search:
         print(f"❌ Verification for {package_name} (region: {region_code}) failed. Attempting search for {app_name}...")
         results = scraper_logic.get_package_by_name(app_name, region=region_code)
         if results:
