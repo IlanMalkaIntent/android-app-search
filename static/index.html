@@ -1667,7 +1667,10 @@
                 }
 
                 // Backup for potential revert (optional, but good practice)
-                lastJsonBackup = JSON.parse(JSON.stringify(importedJsonData));
+                lastJsonBackup = {
+                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
+                    research: JSON.parse(JSON.stringify(researchResults))
+                };
                 document.getElementById('revertBtn').style.display = 'inline-block';
 
                 // Save to localStorage
@@ -1775,7 +1778,10 @@
                 if (message && !confirm(message)) return;
 
                 // --- BACKUP BEFORE APPLYING (moved from before confirm) ---
-                lastJsonBackup = JSON.parse(JSON.stringify(importedJsonData));
+                lastJsonBackup = {
+                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
+                    research: JSON.parse(JSON.stringify(researchResults))
+                };
                 lastUpdateSummary = {
                     category: groupKey,
                     changes: changeLog
@@ -1863,6 +1869,13 @@
                 localStorage.removeItem('lastImportedJson');
                 localStorage.removeItem('lastImportedFileName');
                 
+                // Backup before clear
+                lastJsonBackup = {
+                    importedJson: JSON.parse(JSON.stringify(importedJsonData)),
+                    research: JSON.parse(JSON.stringify(researchResults))
+                };
+                document.getElementById('revertBtn').style.display = 'inline-block';
+                
                 // Clear in-memory data
                 importedJsonData = null;
                 importedFileName = null;
@@ -1923,7 +1936,10 @@
             }
 
             try {
-                importedJsonData = lastJsonBackup;
+                // Restore from enhanced backup structure
+                importedJsonData = lastJsonBackup.importedJson;
+                researchResults = lastJsonBackup.research;
+                
                 const restoredSummary = lastUpdateSummary;
                 lastJsonBackup = null; // Consume backup
                 lastUpdateSummary = null;
@@ -1937,7 +1953,8 @@
                 
                 updateCategoryDropdown();
                 
-                // Re-select the category to refresh the table with reverted data
+                // If a category was selected, restore its view. 
+                // This will re-merge the restored researchResults and importedResults
                 if (categoryToRestore) {
                     const select = document.getElementById('importCategorySelect');
                     if (select) {
