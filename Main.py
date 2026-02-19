@@ -9,22 +9,13 @@ import scraper_logic
 import shutil
 import tempfile
 import json
+import ConfigExport
 from fastapi.responses import FileResponse
-
-# Try to import ConfigExport, handle missing protobuf dependencies gracefully
-try:
-    import ConfigExport
-    CONFIG_EXPORT_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️ ConfigExport not fully available: {e}")
-    CONFIG_EXPORT_AVAILABLE = False
 
 app = FastAPI()
 
 @app.post("/api/export-binary")
 async def export_binary(data: dict):
-    if not CONFIG_EXPORT_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Binary export is unavailable (missing dependencies or ConfigExport.py errors).")
     
     try:
         # Create a temporary directory for processing
