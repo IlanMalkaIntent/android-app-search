@@ -6,8 +6,52 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from google import genai
 import scraper_logic
+import shutil
+import tempfile
+import json
+from fastapi.responses import FileResponse
+
+# Try to import ConfigExport, handle missing protobuf dependencies gracefully
+try:
+    import ConfigExport
+    CONFIG_EXPORT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ ConfigExport not fully available: {e}")
+    CONFIG_EXPORT_AVAILABLE = False
 
 app = FastAPI()
+
+@app.post("/api/export-binary")
+async def export_binary(data: dict):
+    if not CONFIG_EXPORT_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Binary export is unavailable (missing dependencies or ConfigExport.py errors).")
+    
+    try:
+        # Create a temporary directory for processing
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # The encrypt function in ConfigExport writes directly to files in the output_dir
+            ConfigExport.encrypt(data, output_dir=tmpdirname)
+            
+            # Check if any files were actually created
+            generated_files = os.listdir(tmpdirname)
+            if not generated_files:
+                raise HTTPException(status_code=500, detail="No binary files were generated. Check JSON structure.")
+            
+            # Create a zip file in the system temp directory
+            zip_base = os.path.join(tempfile.gettempdir(), "anagog_binary_export")
+            zip_path_full = shutil.make_archive(zip_base, 'zip', tmpdirname)
+            
+            # Return the file and include a header to trigger download
+            return FileResponse(
+                zip_path_full, 
+                media_type='application/zip', 
+                filename="anagog_binary_export.zip"
+            )
+            
+    except Exception as e:
+        print(f"Export Binary Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
