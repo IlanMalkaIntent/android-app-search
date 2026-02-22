@@ -518,6 +518,7 @@
         let decodedJsModels = [];
         let loadedZippedJsonTemplate = null;
         let loadedZippedJsonFilename = null;
+        let expandedJsonPaths = new Set();
 
         const safeParseWeight = (val) => {
             const p = parseFloat(val);
@@ -1480,6 +1481,7 @@
                 decodedJsModels = result.data;
                 loadedZippedJsonTemplate = null;
                 loadedZippedJsonFilename = null;
+                expandedJsonPaths.clear();
                 
                 // Reset file input so same file can be selected again
                 event.target.value = "";
@@ -1549,6 +1551,7 @@
 
                     const result = await response.json();
                     decodedJsModels = result.data;
+                    expandedJsonPaths.clear();
                     
                     event.target.value = "";
 
@@ -2340,10 +2343,10 @@
         // --- JSON Tree Renderer ---
         function renderJsonTree(data, container) {
             container.innerHTML = '';
-            container.appendChild(createJsonNode(null, data, null, true));
+            container.appendChild(createJsonNode(null, data, null, true, false, null, "root"));
         }
 
-        function createJsonNode(key, value, parentRef = null, isRoot = false, isArrayElement = false, parentKey = null) {
+        function createJsonNode(key, value, parentRef = null, isRoot = false, isArrayElement = false, parentKey = null, currentPath = "root") {
             const node = document.createElement('div');
             node.className = 'json-node';
             
@@ -2452,7 +2455,8 @@
                 
                 entries.forEach(([k, v]) => {
                     let nextParentKey = isArray ? (key || parentKey) : k;
-                    content.appendChild(createJsonNode(k, v, value, false, isArray, nextParentKey));
+                    let nextPath = currentPath + (isArray ? `[${k}]` : `.${k}`);
+                    content.appendChild(createJsonNode(k, v, value, false, isArray, nextParentKey, nextPath));
                 });
                 
                 const braceClose = document.createElement('div');
@@ -2471,17 +2475,23 @@
                         braceClose.style.display = 'block';
                         summary.style.display = 'none';
                         toggle.classList.remove('collapsed');
+                        expandedJsonPaths.add(currentPath);
                     } else {
                         content.style.display = 'none';
                         braceClose.style.display = 'none';
                         summary.style.display = 'inline';
                         toggle.classList.add('collapsed');
+                        expandedJsonPaths.delete(currentPath);
                     }
                 };
                 
+                // Track root initially
+                if (isRoot) {
+                    expandedJsonPaths.add(currentPath);
+                }
+
                 // Default collapse state logic
-                // Always expand root but collapse EVERYTHING else
-                if (!isRoot) {
+                if (!expandedJsonPaths.has(currentPath)) {
                     content.style.display = 'none';
                     braceClose.style.display = 'none';
                     summary.style.display = 'inline';
