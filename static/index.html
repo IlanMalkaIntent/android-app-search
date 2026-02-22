@@ -347,8 +347,7 @@
             <div class="modal-header">
                 <h3 class="modal-title">📦 Decoded JSON Preview</h3>
                 <div style="display: flex; gap: 10px; align-items: center; margin-left: auto; margin-right: 16px;">
-                    <input type="file" id="addModelJsonFile" accept=".json" style="display: none;" onchange="addModelFromJson(event)">
-                    <button onclick="document.getElementById('addModelJsonFile').click()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" title="Upload JSON containing a new model object to add to this list.">➕ Add Model (JSON)</button>
+                    <button onclick="addModelFromJson()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" title="Add a copy of the last model to this list.">➕ Add Model</button>
                     <button onclick="exportModifiedBinaryModel()" class="btn btn-success" style="padding: 6px 12px; font-size: 0.85rem;" id="exportModifiedBinBtn">⬇️ Export .bin</button>
                 </div>
                 <span class="modal-close" onclick="document.getElementById('decodedJsonModal').style.display='none'">&times;</span>
@@ -1563,31 +1562,31 @@
             reader.readAsText(file);
         }
 
-        async function addModelFromJson(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const addedModel = JSON.parse(e.target.result);
-                    if (Array.isArray(addedModel)) {
-                        decodedJsModels = decodedJsModels.concat(addedModel);
-                    } else {
-                        decodedJsModels.push(addedModel);
-                    }
-                    
-                    const rootElement = document.getElementById('decodedJsonTreeRoot');
-                    rootElement.innerHTML = '';
-                    renderJsonTree(decodedJsModels, rootElement);
-                    
-                    showToast("Model added successfully!", 'success');
-                } catch (err) {
-                    showToast("Invalid JSON file", 'error');
-                }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
+        function addModelFromJson() {
+            try {
+                if (!decodedJsModels) decodedJsModels = [];
+                
+                let newModel = {
+                    "name": "New Model",
+                    "output_ms": [{"name": "", "index": 0}],
+                    "input_ms": [{"name": "", "index": 0}],
+                    "calculation_period": 86400,
+                    "min_time_since_install": 0,
+                    "min_version": 4036000,
+                    "javascript": ""
+                };
+                
+                decodedJsModels.push(newModel);
+                
+                const rootElement = document.getElementById('decodedJsonTreeRoot');
+                rootElement.innerHTML = '';
+                renderJsonTree(decodedJsModels, rootElement);
+                
+                showToast("New model added successfully!", 'success');
+            } catch (err) {
+                console.error("Add model error", err);
+                showToast("Failed to add model", 'error');
+            }
         }
 
         async function exportModifiedBinaryModel() {
@@ -2273,10 +2272,10 @@
         // --- JSON Tree Renderer ---
         function renderJsonTree(data, container) {
             container.innerHTML = '';
-            container.appendChild(createJsonNode(null, data, true));
+            container.appendChild(createJsonNode(null, data, null, true));
         }
 
-        function createJsonNode(key, value, isRoot = false) {
+        function createJsonNode(key, value, parentRef = null, isRoot = false, isArrayElement = false, parentKey = null) {
             const node = document.createElement('div');
             node.className = 'json-node';
             
@@ -2284,7 +2283,7 @@
             line.className = 'json-line';
             
             // Add key if present (for objects)
-            if (key !== null && !isRoot) {
+            if (key !== null && !isRoot && !isArrayElement) {
                 const keySpan = document.createElement('span');
                 keySpan.className = 'json-key';
                 keySpan.innerText = `"${key}": `;
@@ -2322,13 +2321,70 @@
                 line.appendChild(toggle);
                 line.appendChild(braceOpen);
                 line.appendChild(summary);
+
+                if (parentRef && parentRef === decodedJsModels) {
+                    const removeBtn = document.createElement('span');
+                    removeBtn.innerText = ' 🗑️ Remove';
+                    removeBtn.style.cursor = 'pointer';
+                    removeBtn.style.color = '#e74c3c';
+                    removeBtn.style.fontSize = '0.75rem';
+                    removeBtn.style.marginLeft = '12px';
+                    removeBtn.title = 'Remove this model';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm('Are you sure you want to remove this model?')) {
+                            decodedJsModels.splice(Number(key), 1);
+                            const rootElement = document.getElementById('decodedJsonTreeRoot');
+                            renderJsonTree(decodedJsModels, rootElement);
+                        }
+                    };
+                    line.appendChild(removeBtn);
+                }
+
+                if (isArray && (key === 'input_ms' || key === 'output_ms')) {
+                    const addItemBtn = document.createElement('span');
+                    addItemBtn.innerText = ' ➕ Add Item';
+                    addItemBtn.style.cursor = 'pointer';
+                    addItemBtn.style.color = '#27ae60';
+                    addItemBtn.style.fontSize = '0.75rem';
+                    addItemBtn.style.marginLeft = '12px';
+                    addItemBtn.title = 'Add new item to array';
+                    addItemBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        value.push({"name": "", "index": 0});
+                        const rootElement = document.getElementById('decodedJsonTreeRoot');
+                        renderJsonTree(decodedJsModels, rootElement);
+                    };
+                    line.appendChild(addItemBtn);
+                }
+
+                if (isArrayElement && (parentKey === 'input_ms' || parentKey === 'output_ms')) {
+                    const removeItemBtn = document.createElement('span');
+                    removeItemBtn.innerText = ' 🗑️ Remove Item';
+                    removeItemBtn.style.cursor = 'pointer';
+                    removeItemBtn.style.color = '#e74c3c';
+                    removeItemBtn.style.fontSize = '0.75rem';
+                    removeItemBtn.style.marginLeft = '12px';
+                    removeItemBtn.title = 'Remove this item';
+                    removeItemBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm('Are you sure you want to remove this item?')) {
+                            parentRef.splice(Number(key), 1);
+                            const rootElement = document.getElementById('decodedJsonTreeRoot');
+                            renderJsonTree(decodedJsModels, rootElement);
+                        }
+                    };
+                    line.appendChild(removeItemBtn);
+                }
+
                 node.appendChild(line);
 
                 const content = document.createElement('div');
                 content.className = 'json-content';
                 
                 entries.forEach(([k, v]) => {
-                    content.appendChild(createJsonNode(isArray ? null : k, v));
+                    let nextParentKey = isArray ? (key || parentKey) : k;
+                    content.appendChild(createJsonNode(k, v, value, false, isArray, nextParentKey));
                 });
                 
                 const braceClose = document.createElement('div');
@@ -2369,19 +2425,81 @@
 
             } else {
                 // Primitive values
-                const valueSpan = document.createElement('span');
+                const containerSpan = document.createElement('span');
+                
+                let stringQuoteStart = null;
+                let stringQuoteEnd = null;
+                
                 if (typeof value === 'string') {
+                    stringQuoteStart = document.createElement('span');
+                    stringQuoteStart.className = 'json-string';
+                    stringQuoteStart.innerText = '"';
+                    containerSpan.appendChild(stringQuoteStart);
+                }
+
+                const valueSpan = document.createElement('span');
+                valueSpan.contentEditable = "true";
+                valueSpan.spellcheck = false;
+                valueSpan.style.borderBottom = "1px dashed #ccc";
+                valueSpan.style.outline = "none";
+                valueSpan.style.minWidth = "10px";
+                valueSpan.style.display = "inline-block";
+
+                const originalType = typeof value;
+                if (originalType === 'string') {
                     valueSpan.className = 'json-string';
-                    valueSpan.innerText = `"${value}"`;
-                } else if (typeof value === 'number') {
+                    valueSpan.innerText = value;
+                } else if (originalType === 'number') {
                     valueSpan.className = 'json-number';
                     const isFloatTarget = key === 'weight' || key === 'threshold';
-                        valueSpan.innerText = (isFloatTarget && Number.isInteger(value)) ? value.toFixed(1) : value;
-                } else if (typeof value === 'boolean') {
+                    valueSpan.innerText = (isFloatTarget && Number.isInteger(value)) ? value.toFixed(1) : value;
+                } else if (originalType === 'boolean') {
                     valueSpan.className = 'json-boolean';
                     valueSpan.innerText = value;
                 }
-                line.appendChild(valueSpan);
+                containerSpan.appendChild(valueSpan);
+
+                if (typeof value === 'string') {
+                    stringQuoteEnd = document.createElement('span');
+                    stringQuoteEnd.className = 'json-string';
+                    stringQuoteEnd.innerText = '"';
+                    containerSpan.appendChild(stringQuoteEnd);
+                }
+
+                // Update underlying object on blur
+                valueSpan.addEventListener('blur', function() {
+                    if (parentRef && key !== null) {
+                        let newValue = valueSpan.innerText;
+                        if (originalType === 'number') {
+                            const parsed = Number(newValue);
+                            if (!isNaN(parsed)) {
+                                parentRef[key] = parsed;
+                                valueSpan.style.backgroundColor = '';
+                            } else {
+                                valueSpan.style.backgroundColor = '#ffcccc';
+                            }
+                        } else if (originalType === 'boolean') {
+                            if (newValue === 'true' || newValue === 'false') {
+                                parentRef[key] = (newValue === 'true');
+                                valueSpan.style.backgroundColor = '';
+                            } else {
+                                valueSpan.style.backgroundColor = '#ffcccc';
+                            }
+                        } else {
+                            parentRef[key] = newValue;
+                        }
+                    }
+                });
+                
+                // Allow pressing enter to blur/save
+                valueSpan.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        valueSpan.blur();
+                    }
+                });
+
+                line.appendChild(containerSpan);
                 node.appendChild(line);
             }
 

@@ -1,6 +1,5 @@
-# main.py
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -54,8 +53,9 @@ async def read_binary(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/export-binary-model")
-async def export_binary_model(data: list):
+async def export_binary_model(request: Request):
     try:
+        data = await request.json()
         js_models_str = json.dumps(data)
         encoded_js = ConfigExport.compress_encode(js_models_str.encode('utf-8'))
         return Response(content=encoded_js.encode('utf-8'), media_type="application/octet-stream")
