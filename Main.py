@@ -1,6 +1,6 @@
 # main.py
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import json
 import ConfigExport
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 app = FastAPI()
 
@@ -41,6 +41,39 @@ async def export_binary(data: dict):
             
     except Exception as e:
         print(f"Export Binary Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/read-binary")
+async def read_binary(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        json_data = ConfigExport.decrypt_js_model(content)
+        return {"data": json_data}
+    except Exception as e:
+        print(f"Read Binary Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/export-binary-model")
+async def export_binary_model(data: list):
+    try:
+        js_models_str = json.dumps(data)
+        encoded_js = ConfigExport.compress_encode(js_models_str.encode('utf-8'))
+        return Response(content=encoded_js.encode('utf-8'), media_type="application/octet-stream")
+    except Exception as e:
+        print(f"Export Binary Model Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ZippedModelRequest(BaseModel):
+    zipped_string: str
+
+@app.post("/api/read-zipped-model")
+async def read_zipped_model(request: ZippedModelRequest):
+    try:
+        content = request.zipped_string.encode('utf-8')
+        json_data = ConfigExport.decrypt_js_model(content)
+        return {"data": json_data}
+    except Exception as e:
+        print(f"Read Zipped Model Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

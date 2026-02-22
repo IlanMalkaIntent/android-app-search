@@ -40,5 +40,16 @@ def encrypt(config_data, output_dir: str = "."):
         print(f"An error occurred: {e}")
         raise e
 
+def decrypt_js_model(data: bytes) -> dict:
+    """Reverse of compress_encode: base64 decode, zlib decompress, decode to JSON."""
+    try:
+        compressed_data = base64.b64decode(data)
+        decompressed_data = zlib.decompress(compressed_data)
+        json_str = decompressed_data.decode('utf-8')
+        return json.loads(json_str)
+    except Exception as e:
+        print(f"Decryption Error: {e}")
+        raise e
+
 # Example execution:
 # encrypt('DeepMs.json', './output')

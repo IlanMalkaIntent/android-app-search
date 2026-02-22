@@ -324,10 +324,37 @@
                         <span id="binExportStatus" style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">(Ready)</span>
                     </button>
                     <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Generates .bin files using ConfigExport.py encryption logic.</p>
+                    <input type="file" id="readBinFile" accept=".bin" style="display: none;" onchange="readBinaryModelFile(event)">
+                    <button onclick="document.getElementById('readBinFile').click()" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; gap: 12px; height: 48px; margin-top: 8px;">
+                        <span>📖 Read anagog_js_model.bin</span>
+                    </button>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Extracts and displays JSON from an existing anagog_js_model.bin file.</p>
+                    <input type="file" id="readZippedJsonFile" accept=".json" style="display: none;" onchange="readZippedJsonModelFile(event)">
+                    <button onclick="document.getElementById('readZippedJsonFile').click()" class="btn btn-secondary" style="width: 100%; justify-content: flex-start; gap: 12px; height: 48px; margin-top: 8px;">
+                        <span>📄 Load OnDeviceModelsZipped (JSON)</span>
+                    </button>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Extracts and decodes the OnDeviceModelsZipped string from a JSON file.</p>
                 </div>
             </div>
             <div class="modal-footer">
                 <button onclick="toggleSettings(false)" class="btn btn-primary" style="width: 100%;">Apply & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="decodedJsonModal" class="modal-overlay" onclick="if(event.target === this) document.getElementById('decodedJsonModal').style.display='none'">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">📦 Decoded JSON Preview</h3>
+                <div style="display: flex; gap: 10px; align-items: center; margin-left: auto; margin-right: 16px;">
+                    <input type="file" id="addModelJsonFile" accept=".json" style="display: none;" onchange="addModelFromJson(event)">
+                    <button onclick="document.getElementById('addModelJsonFile').click()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" title="Upload JSON containing a new model object to add to this list.">➕ Add Model (JSON)</button>
+                    <button onclick="exportModifiedBinaryModel()" class="btn btn-success" style="padding: 6px 12px; font-size: 0.85rem;" id="exportModifiedBinBtn">⬇️ Export .bin</button>
+                </div>
+                <span class="modal-close" onclick="document.getElementById('decodedJsonModal').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 24px; background: #fff;">
+                <div id="decodedJsonTreeRoot" class="json-tree-container" style="max-height: calc(80vh - 100px); overflow-y: auto;"></div>
             </div>
         </div>
     </div>
@@ -488,6 +515,7 @@
         let searchAbortController = null;
         let isSearching = false;
         let lastViewedApp = null;
+        let decodedJsModels = [];
 
         const safeParseWeight = (val) => {
             const p = parseFloat(val);
@@ -1424,6 +1452,176 @@
                 setTimeout(() => {
                     if (statusLabel) statusLabel.innerText = "(Ready)";
                 }, 3000);
+            }
+        }
+
+        async function readBinaryModelFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                showToast("Reading binary file...", 'info');
+                const response = await fetch('/api/read-binary', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Failed to read binary file");
+                }
+
+                const result = await response.json();
+                decodedJsModels = result.data;
+                
+                // Reset file input so same file can be selected again
+                event.target.value = "";
+
+                // Show modal and render JSON
+                document.getElementById('decodedJsonModal').style.display = 'flex';
+                // Close settings modal to not overlap
+                toggleSettings(false);
+
+                const rootElement = document.getElementById('decodedJsonTreeRoot');
+                rootElement.innerHTML = '';
+                renderJsonTree(decodedJsModels, rootElement);
+                
+                showToast("JSON extracted successfully!", 'success');
+            } catch (e) {
+                console.error("Read binary error", e);
+                showToast("Failed to read binary file: " + e.message, 'error');
+            }
+        }
+
+        async function readZippedJsonModelFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsedJson = JSON.parse(e.target.result);
+                    
+                    // Recursive function to find OnDeviceModelsZipped
+                    let zippedString = null;
+                    function findZippedString(obj) {
+                        if (obj && typeof obj === 'object') {
+                            if (obj.hasOwnProperty('OnDeviceModelsZipped')) {
+                                return obj['OnDeviceModelsZipped'];
+                            }
+                            for (let key in obj) {
+                                let res = findZippedString(obj[key]);
+                                if (res) return res;
+                            }
+                        }
+                        return null;
+                    }
+                    
+                    zippedString = findZippedString(parsedJson);
+
+                    if (!zippedString) {
+                        showToast("OnDeviceModelsZipped field not found in JSON", 'error');
+                        event.target.value = "";
+                        return;
+                    }
+
+                    showToast("Decoding zipped string...", 'info');
+                    const response = await fetch('/api/read-zipped-model', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ zipped_string: zippedString })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.detail || "Failed to decode zipped string");
+                    }
+
+                    const result = await response.json();
+                    decodedJsModels = result.data;
+                    
+                    event.target.value = "";
+
+                    // Show modal and render JSON
+                    document.getElementById('decodedJsonModal').style.display = 'flex';
+                    toggleSettings(false);
+
+                    const rootElement = document.getElementById('decodedJsonTreeRoot');
+                    rootElement.innerHTML = '';
+                    renderJsonTree(decodedJsModels, rootElement);
+                    
+                    showToast("JSON extracted successfully!", 'success');
+                } catch (e) {
+                    console.error("Read zipped JSON error", e);
+                    showToast("Failed to process file: " + e.message, 'error');
+                    event.target.value = "";
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function addModelFromJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const addedModel = JSON.parse(e.target.result);
+                    if (Array.isArray(addedModel)) {
+                        decodedJsModels = decodedJsModels.concat(addedModel);
+                    } else {
+                        decodedJsModels.push(addedModel);
+                    }
+                    
+                    const rootElement = document.getElementById('decodedJsonTreeRoot');
+                    rootElement.innerHTML = '';
+                    renderJsonTree(decodedJsModels, rootElement);
+                    
+                    showToast("Model added successfully!", 'success');
+                } catch (err) {
+                    showToast("Invalid JSON file", 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        async function exportModifiedBinaryModel() {
+            if (!decodedJsModels || decodedJsModels.length === 0) {
+                showToast("No models to export", 'error');
+                return;
+            }
+            const btn = document.getElementById('exportModifiedBinBtn');
+            btn.innerText = '⏳ Exporting...';
+            try {
+                const response = await fetch('/api/export-binary-model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(decodedJsModels)
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to export binary");
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "anagog_js_model.bin";
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                showToast("Binary export successful!", 'success');
+            } catch (e) {
+                console.error("Binary export error", e);
+                showToast("Export error: " + e.message, 'error');
+            } finally {
+                btn.innerText = '⬇️ Export .bin';
             }
         }
 

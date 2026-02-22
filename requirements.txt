@@ -3,3 +3,4 @@ uvicorn
 google-genai
 google-play-scraper
 requests
+python-multipart
