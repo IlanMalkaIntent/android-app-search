@@ -349,6 +349,7 @@
                 <div style="display: flex; gap: 10px; align-items: center; margin-left: auto; margin-right: 16px;">
                     <button onclick="addModelFromJson()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;" title="Add a copy of the last model to this list.">➕ Add Model</button>
                     <button onclick="exportModifiedBinaryModel()" class="btn btn-success" style="padding: 6px 12px; font-size: 0.85rem;" id="exportModifiedBinBtn">⬇️ Export .bin</button>
+                    <button onclick="exportEmbeddedZippedJson()" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem;" id="exportEmbeddedJsonBtn" title="Re-embed and export the full JSON configuration">⬇️ Export JSON</button>
                 </div>
                 <span class="modal-close" onclick="document.getElementById('decodedJsonModal').style.display='none'">&times;</span>
             </div>
@@ -515,6 +516,8 @@
         let isSearching = false;
         let lastViewedApp = null;
         let decodedJsModels = [];
+        let loadedZippedJsonTemplate = null;
+        let loadedZippedJsonFilename = null;
 
         const safeParseWeight = (val) => {
             const p = parseFloat(val);
@@ -1475,6 +1478,8 @@
 
                 const result = await response.json();
                 decodedJsModels = result.data;
+                loadedZippedJsonTemplate = null;
+                loadedZippedJsonFilename = null;
                 
                 // Reset file input so same file can be selected again
                 event.target.value = "";
@@ -1526,6 +1531,9 @@
                         event.target.value = "";
                         return;
                     }
+
+                    loadedZippedJsonTemplate = parsedJson;
+                    loadedZippedJsonFilename = file.name;
 
                     showToast("Decoding zipped string...", 'info');
                     const response = await fetch('/api/read-zipped-model', {
@@ -1621,6 +1629,66 @@
                 showToast("Export error: " + e.message, 'error');
             } finally {
                 btn.innerText = '⬇️ Export .bin';
+            }
+        }
+
+        async function exportEmbeddedZippedJson() {
+            if (!decodedJsModels || decodedJsModels.length === 0) {
+                showToast("No models to export", 'error');
+                return;
+            }
+            if (!loadedZippedJsonTemplate) {
+                showToast("No source JSON file was loaded to embed into.", 'error');
+                return;
+            }
+
+            const btn = document.getElementById('exportEmbeddedJsonBtn');
+            btn.innerText = '⏳ Embedding...';
+            try {
+                const response = await fetch('/api/encode-zipped-model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(decodedJsModels)
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to encode models");
+                }
+
+                const result = await response.json();
+                const zippedString = result.zipped_string;
+
+                // Recursive function to replace OnDeviceModelsZipped directly in the loaded object
+                function replaceZippedString(obj) {
+                    if (obj && typeof obj === 'object') {
+                        if (obj.hasOwnProperty('OnDeviceModelsZipped')) {
+                            obj['OnDeviceModelsZipped'] = zippedString;
+                            return true;
+                        }
+                        for (let key in obj) {
+                            if (replaceZippedString(obj[key])) return true;
+                        }
+                    }
+                    return false;
+                }
+
+                replaceZippedString(loadedZippedJsonTemplate);
+
+                const jsonStr = JSON.stringify(loadedZippedJsonTemplate, null, 2);
+                const blob = new Blob([jsonStr], { type: "application/json" });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = loadedZippedJsonFilename || "updated_config.json";
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                showToast("JSON exported successfully!", 'success');
+            } catch (e) {
+                console.error("Embedding export error", e);
+                showToast("Export error: " + e.message, 'error');
+            } finally {
+                btn.innerText = '⬇️ Export JSON';
             }
         }
 
@@ -2412,15 +2480,12 @@
                 };
                 
                 // Default collapse state logic
-                // Always expand root
+                // Always expand root but collapse EVERYTHING else
                 if (!isRoot) {
-                    // Collapse large arrays or objects, or specific keys like 'list'
-                    if (size > 10 || key === 'list') {
-                        content.style.display = 'none';
-                        braceClose.style.display = 'none';
-                        summary.style.display = 'inline';
-                        toggle.classList.add('collapsed');
-                    }
+                    content.style.display = 'none';
+                    braceClose.style.display = 'none';
+                    summary.style.display = 'inline';
+                    toggle.classList.add('collapsed');
                 }
 
             } else {

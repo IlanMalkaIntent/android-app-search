@@ -63,6 +63,17 @@ async def export_binary_model(request: Request):
         print(f"Export Binary Model Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/encode-zipped-model")
+async def encode_zipped_model(request: Request):
+    try:
+        data = await request.json()
+        js_models_str = json.dumps(data)
+        encoded_js = ConfigExport.compress_encode(js_models_str.encode('utf-8'))
+        return {"zipped_string": encoded_js}
+    except Exception as e:
+        print(f"Encode Zipped Model Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ZippedModelRequest(BaseModel):
     zipped_string: str
 
